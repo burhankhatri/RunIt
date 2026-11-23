@@ -8,7 +8,15 @@ Measured on a MacBook Air (M4, 16 GB, fanless) on 2026-11-23 with `runit check`,
 | Llama 3.2 3B Instruct Q4_K_M | dense | 47.5 | 44.2 | +7.3% |
 | LFM2.5 8B A1B Q4_K_M | mixture of experts | 90.7 | 77.6 | +16.9% |
 
-On a Windows CI machine (AMD EPYC, processor only), LFM2.5 230M Q4_K_M was predicted at 203 tok/s and measured at 217 (-6.5%).
+On shared CI machines, with the processor only, for LFM2.5 230M Q4_K_M:
+
+| Machine | Predicted tok/s | Measured tok/s | Difference |
+|---|---|---|---|
+| Windows, AMD EPYC 9V74 | 203 | 217 | -6.5% |
+| Windows, AMD EPYC 7763 | 138 | 149 | -7.4% |
+| macOS, virtual Apple M1 | 169 | 232 | -27% |
+
+Shared machines vary from minute to minute. The last one falls outside the range the app showed.
 
 The range shown in the app is ±15% for dense models that fit, ±25% for mixtures, ±30% when a model is split between graphics and system memory, and ±35% when the header could not be read.
 

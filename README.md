@@ -14,6 +14,10 @@ Windows 10 or 11, in PowerShell:
 irm https://raw.githubusercontent.com/burhankhatri/RunIt/main/install.ps1 | iex
 ```
 
+![RunIt on macOS](docs/images/macos.png)
+
+![RunIt on Windows](docs/images/windows.png)
+
 ## What it does
 
 1. **Tests your computer with the real engine.** RunIt writes test models with random weights to your disk and times [llama.cpp](https://github.com/ggml-org/llama.cpp) on them, on your graphics processor and your processor. It needs no download and takes a minute or two.
