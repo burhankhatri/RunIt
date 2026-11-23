@@ -14,7 +14,7 @@ fn catalog() -> Vec<Entry> {
         e("ibm-granite/granite-4.2-8b-GGUF", vec![v("Q4_K_M", 4.9, 53 * GB / 10), v("Q8_0", 8.5, 94 * GB / 10)]), // 1319, 19 tok/s
         e("ibm-granite/granite-4.2-3b-GGUF", vec![v("Q2_K", 3.2, 146 * GB / 100), v("Q4_K_M", 4.9, 22 * GB / 10)]), // 1293, 45 tok/s
         e("unsloth/Llama-3.2-3B-Instruct-GGUF", vec![v("Q4_K_M", 4.9, 2 * GB)]),          // 1110, 50 tok/s
-        e("bartowski/gemma-3-12b-it-GGUF", vec![v("Q4_K_M", 4.9, 8 * GB)]),                // 1334, 12 tok/s
+        e("bartowski/gemma-3-12b-it-GGUF", vec![v("Q4_K_M", 4.9, 104 * GB / 10)]),          // 1334, 9.6 tok/s, tight
         e("somebody/Qwen3.8-9B-Distill-GGUF", vec![v("Q4_K_M", 4.9, 5 * GB)]),             // unrated
     ]
 }
@@ -103,4 +103,15 @@ fn a_slow_best_is_not_called_smooth() {
     assert_eq!(s.picks[0].role, "best");
     assert!(s.picks[0].choice.prediction.tokens_per_s < 15.0);
     assert!(!s.picks[0].why.contains("smooth"), "{}", s.picks[0].why);
+}
+
+#[test]
+fn a_much_better_model_above_reading_speed_beats_a_quicker_weak_one() {
+    let f = Fit { decode_s_per_byte: 1.0 / 25e9, decode_s_per_layer: 0.0, prompt_s_per_param: 1e-12, prompt_s_per_layer: 0.0, kv_s_per_byte: 0.0 };
+    let slow = Calibration { gpu: None, cpu: f, sustained: 1.0 };
+    let s = shortlist(&[
+        e("ibm-granite/granite-4.2-3b-GGUF", vec![v("Q4_K_M", 4.9, 22 * GB / 10)]),          // 1293 at 11 tok/s
+        e("bartowski/granite-3.1-2b-instruct-GGUF", vec![v("Q4_K_M", 4.9, 15 * GB / 10)]),   // 1127 at 16 tok/s
+    ], &Ratings::bundled(), &m(), &slow, &|v| vec![None; v.len()]);
+    assert_eq!(role(&s, "best"), Some("ibm-granite/granite-4.2-3b-GGUF"));
 }
