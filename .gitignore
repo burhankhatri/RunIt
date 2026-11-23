@@ -1,0 +1,9 @@
+target/
+.build/
+dist/
+engines/
+bin/
+obj/
+.DS_Store
+.worktrees/
+*.gguf
