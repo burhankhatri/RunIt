@@ -1,0 +1,65 @@
+name: Release
+on:
+  push: { tags: ["v*"] }
+permissions: { contents: read }
+
+jobs:
+  macos:
+    strategy:
+      matrix:
+        include:
+          - { runner: macos-15, arch: arm64 }
+          - { runner: macos-15-intel, arch: x86_64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test --workspace
+      - run: scripts/build-macos.sh ${{ matrix.arch }}
+      - run: ditto -ck --keepParent dist/RunIt.app RunIt-macos-${{ matrix.arch }}.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: "macos-${{ matrix.arch }}", path: "RunIt-macos-*.zip", if-no-files-found: error }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 10.0.x }
+      - run: cargo test --workspace
+      - run: scripts/build-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with: { name: windows-x64, path: dist/RunIt-windows-x64.zip, if-no-files-found: error }
+
+  publish:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: files, merge-multiple: true }
+      - run: cd files && sha256sum *.zip | tee SHA256SUMS
+      - env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release create "$GITHUB_REF_NAME" files/* --repo "$GITHUB_REPOSITORY" --title "RunIt ${GITHUB_REF_NAME#v}" --generate-notes
+
+  # The same commands people are told to run, on clean machines.
+  install-macos:
+    needs: publish
+    strategy: { matrix: { runner: [macos-15, macos-15-intel] } }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - env: { RUNIT_NO_OPEN: "1" }
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/install.sh" | sh
+          /Applications/RunIt.app/Contents/MacOS/runit-cli test
+          /Applications/RunIt.app/Contents/MacOS/runit-cli models
+  install-windows:
+    needs: publish
+    runs-on: windows-latest
+    steps:
+      - shell: powershell
+        env: { RUNIT_NO_OPEN: "1" }
+        run: |
+          irm "https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/$env:GITHUB_REF_NAME/install.ps1" | iex
+          $cli = "$env:LOCALAPPDATA\Programs\RunIt\runit-cli.exe"
+          & $cli test; if ($LASTEXITCODE) { throw 'the test failed' }
+          & $cli models; if ($LASTEXITCODE) { throw 'no suggestions' }

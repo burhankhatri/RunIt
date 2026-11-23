@@ -111,7 +111,7 @@ enum Rehearsal {
         let dir = folder.appending(path: "film-\(name)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for (n, f) in frames.enumerated() {
-            try? f.representation(using: .jpeg, properties: [.compressionFactor: 0.8])?.write(to: dir.appending(path: String(format: "%04d.jpg", n)))
+            try? f.representation(using: .png, properties: [:])?.write(to: dir.appending(path: String(format: "%04d.png", n)))
         }
         say("film \(name): \(frames.count) frames in \(seconds) s")
     }
