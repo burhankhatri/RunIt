@@ -21,6 +21,9 @@ public static class Theme
     /// Off when the person asked Windows for no animation.
     public static bool Still => !SystemParameters.ClientAreaAnimation && Rehearsal.Folder is null;
 
+    /// Another app is in front, so nothing needs to move.
+    public static bool Resting => Rehearsal.Folder is null && Application.Current.MainWindow is { IsActive: false };
+
     private static SolidColorBrush B(uint h, double opacity = 1)
     {
         var b = new SolidColorBrush(Color.FromRgb((byte)(h >> 16), (byte)(h >> 8), (byte)h)) { Opacity = opacity };

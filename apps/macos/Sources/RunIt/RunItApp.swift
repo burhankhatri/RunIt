@@ -32,6 +32,7 @@ struct RunItApp: App {
 
 struct Root: View {
     @Environment(Store.self) private var store
+    @Environment(\.controlActiveState) private var active
     var body: some View {
         ZStack {
             Color.ground.ignoresSafeArea()
@@ -49,6 +50,7 @@ struct Root: View {
         .foregroundStyle(Color.text)
         .animation(.easeInOut(duration: 0.3), value: store.entered)
         .overlay(alignment: .bottom) { Notice() }
+        .environment(\.resting, active == .inactive && Rehearsal.folder == nil)
     }
 }
 

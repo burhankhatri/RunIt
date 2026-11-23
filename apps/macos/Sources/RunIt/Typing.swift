@@ -64,13 +64,15 @@ struct SpeedPreview: View {
     /// How much of the sample fits where it is shown.
     var limit = 48
     @Environment(\.accessibilityReduceMotion) private var still
+    @Environment(\.resting) private var resting
     @State private var start = Date.now
 
     var body: some View {
         let tokens = Array((code ? Samples.code : Samples.prose).prefix(limit))
         let chars = Array(tokens.joined())
         let length = Double(tokens.count) / max(tokensPerSecond, 0.1)
-        TimelineView(.animation(paused: still)) { t in
+        // Drawn once per token, never faster than the eye: an idle window should cost nothing.
+        TimelineView(.animation(minimumInterval: 1 / min(60, max(4, tokensPerSecond)), paused: still || resting)) { t in
             let at = still ? length : t.date.timeIntervalSince(start).truncatingRemainder(dividingBy: length + 2.4)
             let n = min(tokens.count, Int(at * tokensPerSecond))
             Text(written(chars, tokens.prefix(n).reduce(0) { $0 + $1.count }, color: color, caret: color))

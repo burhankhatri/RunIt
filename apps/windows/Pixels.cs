@@ -20,7 +20,7 @@ public sealed class Creature : FrameworkElement
         IsHitTestVisible = false;
         RenderOptions.SetEdgeMode(this, EdgeMode.Aliased);
         timer = new(DispatcherPriority.Render) { Interval = TimeSpan.FromSeconds(pace) };
-        timer.Tick += (_, _) => { frame ^= 1; InvalidateVisual(); };
+        timer.Tick += (_, _) => { if (Theme.Resting) return; frame ^= 1; InvalidateVisual(); };
         Loaded += (_, _) => { if (!Theme.Still) timer.Start(); };
         Unloaded += (_, _) => timer.Stop();
     }

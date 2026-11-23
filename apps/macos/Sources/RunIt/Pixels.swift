@@ -1,6 +1,11 @@
 import RunItText
 import SwiftUI
 
+extension EnvironmentValues {
+    /// Another app is in front, so nothing needs to move.
+    @Entry var resting = false
+}
+
 /// Square cells with no soft edges.
 private func cells(_ rows: [UInt16], _ side: CGFloat, keep: (Int, Int) -> Bool = { _, _ in true }) -> Path {
     var p = Path()
@@ -21,10 +26,11 @@ struct Creature: View {
     var pace = 0.46
     @Environment(Store.self) private var store
     @Environment(\.accessibilityReduceMotion) private var still
+    @Environment(\.resting) private var resting
 
     var body: some View {
         let frames = store.creature(name)
-        TimelineView(.animation(minimumInterval: pace, paused: still)) { t in
+        TimelineView(.animation(minimumInterval: pace, paused: still || resting)) { t in
             let n = still ? 0 : Int(t.date.timeIntervalSinceReferenceDate / pace) % 2
             Canvas(rendersAsynchronously: false) { g, _ in
                 if frames.count == 2 { g.fill(cells(frames[n], side), with: .color(color), style: FillStyle(antialiased: false)) }
@@ -67,7 +73,7 @@ struct Building: View {
 
     var body: some View {
         let order = order
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: still)) { t in
+        TimelineView(.animation(minimumInterval: 1 / 10, paused: still)) { t in
             let blink = Int(t.date.timeIntervalSinceReferenceDate * 5) % 2 == 0
             Canvas { g, _ in draw(&g, order, blink) }
         }

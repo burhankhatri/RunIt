@@ -104,12 +104,16 @@ public sealed class SpeedPreview : TextBlock
         Inlines.Add(written);
         Inlines.Add(ahead);
         ahead.Text = whole;
-        Loaded += (_, _) => { CompositionTarget.Rendering -= Tick; CompositionTarget.Rendering += Tick; };
-        Unloaded += (_, _) => CompositionTarget.Rendering -= Tick;
+        // Drawn once per token, never faster than the eye: an idle window should cost nothing.
+        var timer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render) { Interval = TimeSpan.FromSeconds(1 / Math.Clamp(speed, 4, 60)) };
+        timer.Tick += Tick;
+        Loaded += (_, _) => timer.Start();
+        Unloaded += (_, _) => timer.Stop();
     }
 
     private void Tick(object? s, EventArgs e)
     {
+        if (Theme.Resting) return;
         var length = (ends.Length - 1) / speed;
         var n = Math.Min(ends.Length - 1, (int)(clock.Elapsed.TotalSeconds % (length + 2.4) * speed));
         if (n == shown) return;
