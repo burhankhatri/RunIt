@@ -6,132 +6,156 @@ namespace RunIt;
 
 public sealed class ForYou : Grid
 {
-    private static string? selected;
-    private readonly StackPanel list = new() { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly Border pane = new();
-    private readonly List<Action> redraw = [];
+    private Blocks? loading;
 
     public ForYou()
     {
         Build();
-        this.Listen(t => { if (t is "shortlist") Build(); else if (t is "catalog" && Store.Current.Shortlist is null) Build(); });
+        this.Listen(t => { if (t is "shortlist") Build(); else if (t is "catalog") loading?.Set(Store.Current.CatalogProgress ?? 0); });
     }
 
     private void Build()
     {
         Children.Clear();
-        ColumnDefinitions.Clear();
-        redraw.Clear();
+        loading = null;
         var s = Store.Current;
-        if (s.Shortlist is not { } list_)
+        if (s.Shortlist is { } list) { Children.Add(Ui.Page(Page(list))); return; }
+        if (s.ShortlistError is { } e)
         {
-            if (s.ShortlistError is { } e)
-                Children.Add(Ui.Stack(Ui.Head("The catalog is out of reach.", 40), Ui.Soft(e, 15).Pad(0, 14), Ui.Solid("Try again", async () => await s.Recommend()).Pad(0, 18)).Max(520).Mid().Pad(40));
-            else
-            {
-                var bar = Ui.Bar(2, Theme.Ink, false);
-                bar.Set(s.CatalogProgress ?? 0);
-                Children.Add(Ui.Stack(Ui.Head("Reading the catalog.", 40), bar.View.Pad(0, 20, 0, 14).Max(320), Ui.Soft("Sizing up every model hosted on Hugging Bay.", 14)).Mid().Pad(40));
-                bar.View.Width = 320;
-            }
+            Children.Add(Ui.Stack(new Creature("offline", 100, Theme.Alarm).Left(), Ui.Bold("The catalog is out of reach", 26).Pad(0, 16), Ui.Soft(e, 15).Pad(0, 12), Ui.Block("Try again", async () => await s.Recommend()).Pad(0, 18)).Max(480).Centre().Mid());
             return;
         }
-        var all = list_.Picks.Select(p => p.Choice).Concat(list_.Ranked).Concat(list_.Unrated).ToList();
-        if (all.All(c => c.Id != selected)) selected = all.FirstOrDefault()?.Id;
-        ColumnDefinitions.Add(new());
-        ColumnDefinitions.Add(new() { Width = new(1) });
-        ColumnDefinitions.Add(new() { Width = new(390) });
-
-        list.Children.Clear();
-        if (list_.Picks.Count > 0) Verdict(list_.Picks[0]);
-        else { list.Children.Add(Ui.Head("Nothing rated fits this computer comfortably.", 40)); list.Children.Add(Ui.Soft("Smaller models below may still be worth a try.", 15).Pad(0, 10)); }
-
-        var picks = new StackPanel { Margin = new(0, 34, 0, 0) };
-        picks.Children.Add(Ui.Line());
-        for (var n = 0; n < list_.Picks.Count; n++) { picks.Children.Add(Slot(PickRow, list_.Picks[n]).Rise(0.55 + n * 0.09)); picks.Children.Add(Ui.Line()); }
-        list.Children.Add(picks);
-        if (list_.Ranked.Count > 0) Table("Rated, and runs here", $"Rating: LMArena, {list_.RatingsDate}. Higher is better.", list_.Ranked.Take(14));
-        if (list_.Unrated.Count > 0) Table("Popular, not rated yet", "From the model's own publisher, by downloads.", list_.Unrated);
-
-        (list.Parent as ContentControl)?.SetCurrentValue(ContentControl.ContentProperty, null);
-        list.Margin = new(40, 34, 40, 40);
-        Children.Add(Ui.Scroll(list));
-        var line = Ui.Tall();
-        SetColumn(line, 1);
-        SetColumn(pane, 2);
-        Children.Add(line); Children.Add(pane);
-        Pane();
+        loading = new Blocks(s.CatalogProgress ?? 0, 30).Centre();
+        Children.Add(Ui.Stack(new Creature(s.Report?.Machine.Cpu ?? "RunIt", 120, Theme.Orange, 0.2).Centre(), Ui.Bold("Sizing up every model on Hugging Bay", 18).Centre().Pad(0, 22, 0, 22), loading).Centre().Mid());
     }
 
-    private void Pane()
+    /// Up to three cards: the picks, then the next best so there is always a choice.
+    private static List<(Choice Choice, string Line, bool Code)> Cards(Shortlist s)
     {
-        var s = Store.Current.Shortlist!;
-        var c = s.Picks.Select(p => p.Choice).Concat(s.Ranked).Concat(s.Unrated).FirstOrDefault(c => c.Id == selected);
-        pane.Child = c is null ? null : new DetailPane(c.Id, c, s.Picks.Any(p => p.Choice.Id == c.Id && p.Role == "code"));
-    }
-
-    private void Select(string id) { if (selected == id) return; selected = id; foreach (var r in redraw) r(); Pane(); }
-
-    /// A row that can redraw itself when the selection moves.
-    private Border Slot<T>(Func<T, UIElement> make, T data)
-    {
-        var b = new Border { Child = make(data) };
-        redraw.Add(() => b.Child = make(data));
-        return b;
-    }
-
-    private void Verdict(Pick best)
-    {
-        var chip = Store.Current.Report?.Machine is { } m ? m.Gpu is { Integrated: false } g ? g.Name : m.Cpu : "computer";
-        list.Children.Add(new Typed(Ui.Head($"Your {chip} is at its best with", 44), 50, 0, false));
-        list.Children.Add(new Marked(best.Choice.Name, 52, 0.7));
-        var p = best.Choice.Prediction;
-        var text = $"It should write {Show.Speed(p.TokensPerSLow)} to {Show.Speed(p.TokensPerSHigh)} tokens a second and leave {Show.Memory(Math.Max(0, p.CapacityBytes - p.NeedBytes))} of model memory free.";
-        var names = new Dictionary<string, string> { ["quick"] = "the quickest", ["code"] = "best for code", ["smart"] = "the smartest it can hold" };
-        var also = best.Also.Where(names.ContainsKey).Select(a => names[a]).ToList();
-        if (also.Count > 0) text += $" Also {string.Join(" and ", also)}.";
-        list.Children.Add(Ui.Text(text, Theme.Sans, 16, Theme.Faint, line: 24).Max(520).Pad(0, 12));
-    }
-
-    private UIElement PickRow(Pick p)
-    {
-        var words = Ui.Stack(Ui.Soft(p.Title), Ui.Head(p.Choice.Name, 27).Pad(0, 4, 0, 4), Ui.Soft(p.Why, 13.5)).Pad(0, 0, 18);
-        var speed = Ui.Stack(new Rolling(p.Choice.Prediction.TokensPerS, 38).Right(), Ui.Soft("tokens/s", 11.5).Right());
-        return Ui.Choice(Ui.Ends(words, speed), selected == p.Choice.Id, () => Select(p.Choice.Id), $"{p.Title}: {p.Choice.Name}", new(16, 16, 14, 16));
-    }
-
-    private void Table(string title, string sub, IEnumerable<Choice> rows)
-    {
-        list.Children.Add(Ui.Head(title, 26).Pad(0, 46));
-        list.Children.Add(Ui.Soft(sub).Pad(0, 4, 0, 14));
-        list.Children.Add(Ui.Line());
-        foreach (var c in rows)
+        var list = s.Picks.Take(3).Select(p =>
         {
-            list.Children.Add(Slot(x => Rows.Model(x.Name, $"{x.Variant.Label}, {Show.Size(x.Variant.Size)}", x.Rating?.Score, x.Prediction, selected == x.Id, () => Select(x.Id)), c));
-            list.Children.Add(Ui.Line());
+            var x = p.Choice.Prediction;
+            var line = p.Role switch
+            {
+                "best" => x.TokensPerS >= 10 ? $"Best for this PC. {Show.Memory(Math.Max(0, x.CapacityBytes - x.NeedBytes))} to spare." : "The best this PC can run, slowly.",
+                "quick" => "Quickest worth using.",
+                "code" => "Best for code.",
+                _ => x.Tier == "tight" ? "Smartest it can hold. A tight fit." : "Smartest it can hold.",
+            };
+            return (p.Choice, line, p.Role == "code");
+        }).ToList();
+        foreach (var c in s.Ranked.Concat(s.Unrated))
+            if (list.Count < 3 && list.All(x => x.Choice.Id != c.Id)) list.Add((c, c.Rating is { } r ? $"Rated {r.Score}. Runs well too." : "Popular, not rated yet.", false));
+        return list;
+    }
+
+    private static StackPanel Page(Shortlist s)
+    {
+        var r = Store.Current.Report;
+        var cards = Cards(s);
+        var shown = cards.Select(c => c.Choice.Id).ToHashSet();
+        var page = Ui.Stack(
+            Ui.Bold(s.Picks.Count == 0 ? "Nothing rated fits comfortably" : "Your PC runs these well", 27),
+            Ui.Soft(r is null ? "" : $"{(r.Machine.Gpu is { Integrated: false } g ? g.Name : r.Machine.Cpu)}, {Math.Round(r.Machine.RamBytes / 1073741824)} GB. Tested at {(int)(r.BytesPerS / 1e9)} GB of model a second.", 14).Pad(0, 6, 0, 20));
+        if (cards.Count > 0) page.Children.Add(Ui.Columns([.. cards.Select((c, n) => ((UIElement)Card(c.Choice, c.Line, c.Code, n == 0).Rise(0.05 + n * 0.08), n == 0 ? 1.55 : 1.0))], 14));
+        void Table(string title, string sub, IEnumerable<Choice> rows)
+        {
+            var list = rows.Where(c => !shown.Contains(c.Id)).Take(12).ToList();
+            if (list.Count == 0) return;
+            page.Children.Add(Ui.Ends(Ui.Bold(title, 16), Ui.Soft(sub).Foot()).Pad(0, 32, 0, 10));
+            foreach (var c in list)
+            {
+                page.Children.Add(Ui.Line());
+                page.Children.Add(Rows.Model(c.Name, Show.Size(c.Variant.Size), c.Rating?.Score, c.Prediction, () => Store.Current.Open(new(c.Id, c.Name, c))));
+            }
         }
+        Table("More that run here", $"LMArena rating, {s.RatingsDate}", s.Ranked);
+        Table("Popular, not rated yet", "From the model's own publisher", s.Unrated);
+        return page;
+    }
+
+    private static FrameworkElement Card(Choice c, string line, bool code, bool big)
+    {
+        var tint = Store.Current.Tint(c.Name);
+        var creature = new Creature(c.Name, 110);
+        var number = Ui.Row(new Figure(c.Prediction.TokensPerS, 64), Ui.Bold("tokens/s", 12.5, Theme.Ink).Foot().Pad(7, 0, 0, 9)).Foot().Left().Pad(20, 0, 0, 8);
+        UIElement upper = big
+            ? Ui.Columns([(creature.Top().Pad(0, 2), -1), (new SpeedPreview(c.Prediction.TokensPerS, code, 22).Top(), 0)], 24).Pad(26, 22, 16)
+            : creature.Centre().Top().Pad(0, 24);
+        var art = new Border { Height = 224, Background = tint, CornerRadius = new(14, 14, 0, 0), Child = new Grid { Children = { upper, number } } };
+        var words = Ui.Stack(Ui.Bold(c.Name, 16).OneLine(), Ui.Soft(line, 13).Pad(0, 4)).Mid();
+        var below = new Border
+        {
+            Background = Theme.Card, CornerRadius = new(0, 0, 14, 14), Padding = new(18, 14, 18, 14), MinHeight = 78,
+            Child = big ? Ui.Ends(words.Pad(0, 0, 12), new Get(c.Id, c.Repo, c.Variant, tint, Theme.Ink, false).Mid()) : words,
+        };
+        var grid = new Grid { Children = { art, below }, Background = Brushes.Transparent, Cursor = System.Windows.Input.Cursors.Hand };
+        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new());
+        SetRow(below, 1);
+        Ui.Hop(grid, creature, 8);
+        grid.MouseLeftButtonUp += (_, _) => Store.Current.Open(new(c.Id, c.Name, c, code));
+        grid.Focusable = true;
+        grid.FocusVisualStyle = null;
+        grid.KeyDown += (_, e) => { if (e.Key is System.Windows.Input.Key.Enter or System.Windows.Input.Key.Space && e.OriginalSource == grid) Store.Current.Open(new(c.Id, c.Name, c, code)); };
+        System.Windows.Automation.AutomationProperties.SetName(grid, $"{c.Name}, {Show.Speed(c.Prediction.TokensPerS)} tokens a second. {line}");
+        return grid;
+    }
+}
+
+/// Download, progress, or try it: whatever comes next for this file.
+public sealed class Get : Border
+{
+    private string state = "";
+    public Get(string id, string repo, Variant v, Brush fill, Brush label, bool tall, bool enabled = true)
+    {
+        void Draw()
+        {
+            var s = Store.Current;
+            var i = s.Find(repo, v.Files);
+            var (text, act, on) = i switch
+            {
+                null => ($"Get {Show.Size(v.Size)}", () => s.Download(id, v.Files), enabled),
+                { Ready: true } => ("Try it", () => s.OpenChat(i.Key), i.Runnable),
+                { Status: "paused" } => ("Resume", () => s.Act("resume", i.Key), true),
+                { Status: "failed" } => ("Try again", () => s.Act("resume", i.Key), true),
+                _ => ($"{(int)(i.Done / Math.Max(i.Total, 1) * 100)}%", (Action)(() => s.Go(Place.Library)), true),
+            };
+            if (state == text + on) return;
+            state = text + on;
+            var b = Ui.Block(text, act, fill, label, tall);
+            b.IsEnabled = on;
+            Child = b;
+        }
+        Draw();
+        this.Listen(t => { if (t is "items") Draw(); });
     }
 }
 
 public static class Rows
 {
-    public static UIElement Model(string name, string sub, int? rating, Prediction? p, bool on, Action act)
+    public static UIElement Model(string name, string sub, int? rating, Prediction? p, Action act)
     {
-        var words = Ui.Stack(Ui.Body(name, 14, bold: true).OneLine(), Ui.Soft(sub, 12).OneLine().Pad(0, 2));
-        var score = Ui.Fig(rating?.ToString() ?? "", 13, Theme.Faint).Right().Mid();
-        score.Width = 48; score.TextAlignment = TextAlignment.Right;
-        var speed = new Border { Width = 116, Child = Speed(p) }.Mid();
-        return Ui.Choice(Ui.Ends(words.Pad(0, 0, 10), Ui.Row(score, speed)), on, act, name, new(16, 9, 12, 9));
+        var tile = Tile.Of(name, 34).Mid();
+        var score = Ui.Soft(rating?.ToString() ?? "", 13).Mid().Wide(52);
+        score.TextAlignment = TextAlignment.Right;
+        var speed = new Border { Width = 112, Child = Speed(p) }.Mid();
+        FrameworkElement blocks = p is { Tier: not "too_big" } ? new Blocks(p.TokensPerS / 60, color: Store.Current.Tint(name)) : new Border { Width = 285 };
+        var words = Ui.Stack(Ui.Bold(name).OneLine(), Ui.Soft(sub, 12).OneLine().Pad(0, 2)).Mid();
+        var row = new Border { Height = 54, Padding = new(6, 0, 6, 0), CornerRadius = new(8), Background = Brushes.Transparent, Child = Ui.Columns([(tile, -1), (words, 0), (blocks.Mid(), -1), (score, -1), (speed, -1)], 14) };
+        row.MouseEnter += (_, _) => row.Background = Theme.Card;
+        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+        Ui.Hop(row, tile, 3);
+        return Ui.Bare(row, act, name);
     }
 
     public static UIElement? Speed(Prediction? p)
     {
         if (p is null) return null;
         if (p.Tier == "too_big") return Ui.Soft("too big", 13).Right();
-        var row = Ui.Row(
-            p.Tier == "comfortable" ? null : Ui.Body(p.Tier == "tight" ? "tight" : "split", 11, Theme.Alarm).Pad(0, 4, 5),
-            Ui.Fig((p.Rough ? "~" : "") + Show.Speed(p.TokensPerS), 15, bold: true),
-            Ui.Soft("tok/s", 11).Pad(4, 4));
-        return row.Right();
+        return Ui.Row(
+            p.Tier == "comfortable" ? null : Ui.Bold(p.Tier == "tight" ? "tight" : "split", 11, Theme.Alarm).Foot().Pad(0, 0, 6, 5),
+            Ui.Pixel((p.Rough ? "~" : "") + Show.Speed(p.TokensPerS), 25),
+            Ui.Soft("tok/s", 11).Foot().Pad(5, 0, 0, 5)).Right();
     }
 }

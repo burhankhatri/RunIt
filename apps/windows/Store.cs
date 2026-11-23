@@ -4,6 +4,9 @@ namespace RunIt;
 
 public enum Place { ForYou, Browse, Library, Machine }
 
+/// A model opened from a list.
+public sealed record Opened(string Id, string Name, Choice? Seed = null, bool Code = false);
+
 public sealed class Turn(bool mine, string text) { public bool Mine { get; } = mine; public string Text { get; set; } = text; public string Thought { get; set; } = ""; }
 
 /// Everything the screens show. Changes are announced by topic, on the UI thread.
@@ -32,13 +35,13 @@ public sealed class Store
     public bool Entered { get; private set; }
 
     public Place Place { get; private set; }
+    public Opened? Opened { get; private set; }
     public Shortlist? Shortlist { get; private set; }
     public double? CatalogProgress { get; private set; }
     public string? ShortlistError { get; private set; }
 
     public string Query { get; private set; } = "";
     public List<Hit> Hits { get; private set; } = [];
-    public Hit? Browsing { get; private set; }
     public long Total { get; private set; }
     public string? Next { get; private set; }
     public bool Searching { get; private set; }
@@ -99,7 +102,7 @@ public sealed class Store
     {
         ShortlistError = null;
         Say("shortlist");
-        try { Shortlist = await Core!.Call<Shortlist>("recommend"); } catch (Exception e) { ShortlistError = e.Message; }
+        try { var s = await Core!.Call<Shortlist>("recommend"); AssignTints(s); Shortlist = s; } catch (Exception e) { ShortlistError = e.Message; }
         CatalogProgress = null;
         Say("shortlist");
     }
@@ -107,8 +110,28 @@ public sealed class Store
     public void Go(Place p)
     {
         if (ChatKey is not null) CloseChat();
-        Place = p;
+        (Opened, Place) = (null, p);
         Say("place");
+    }
+    public void Open(Opened? o) { Opened = o; Say("place"); }
+
+    // Looks
+
+    private readonly Dictionary<string, int[][]> creatures = [];
+    private readonly Dictionary<string, int> tints = [];
+
+    public int[][] Creature(string name) => creatures.TryGetValue(name, out var c) ? c : creatures[name] = Core?.Creature(name) ?? [];
+
+    /// A model keeps one colour everywhere. Suggestions take turns, so neighbours differ.
+    public System.Windows.Media.SolidColorBrush Tint(string name)
+    {
+        var n = tints.TryGetValue(name, out var t) ? t : Creature(name).SelectMany(r => r).Aggregate(0, (a, r) => (a * 31 + r) & 0xFFFF);
+        return Theme.Tints[n % Theme.Tints.Length];
+    }
+    private void AssignTints(Shortlist s)
+    {
+        tints.Clear();
+        foreach (var c in s.Picks.Select(p => p.Choice).Concat(s.Ranked).Concat(s.Unrated)) tints.TryAdd(c.Name, tints.Count);
     }
 
     // Browse
@@ -137,7 +160,6 @@ public sealed class Store
         Searching = false;
         Say("search");
     }
-    public void Select(Hit? h) { Browsing = h; Say("browsing"); }
 
     // Library
 

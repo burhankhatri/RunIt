@@ -30,7 +30,7 @@ jobs:
       - name: Rehearse the app
         run: |
           mkdir -p shots
-          export RUNIT_DATA_DIR="$PWD/data-ci" RUNIT_SHOTS="$PWD/shots" RUNIT_LOOK=light
+          export RUNIT_DATA_DIR="$PWD/data-ci" RUNIT_SHOTS="$PWD/shots"
           dist/RunIt.app/Contents/MacOS/runit-cli get hf-model-liquidai-lfm2-5-230m-gguf Q4_K_M | tr '\r' '\n' | tail -1
           perl -e 'alarm 1500; exec @ARGV' dist/RunIt.app/Contents/MacOS/RunIt 2>&1 | tee shots/log.txt
           grep -q 'REHEARSAL OK' shots/log.txt
@@ -55,7 +55,7 @@ jobs:
         run: cargo test -p runit-core --features live --test live
       - name: Rehearse the app
         run: |
-          $env:RUNIT_DATA_DIR = "$pwd\data-ci"; $env:RUNIT_SHOTS = "$pwd\shots"; $env:RUNIT_LOOK = 'light'; $env:RUNIT_FETCH = 'hf-model-liquidai-lfm2-5-230m-gguf'
+          $env:RUNIT_DATA_DIR = "$pwd\data-ci"; $env:RUNIT_SHOTS = "$pwd\shots"; $env:RUNIT_FETCH = 'hf-model-liquidai-lfm2-5-230m-gguf'
           $p = Start-Process dist\RunIt\RunIt.exe -PassThru
           if (-not $p.WaitForExit(1800000)) { $p.Kill(); throw 'the rehearsal did not finish' }
           Get-Content shots\log.txt

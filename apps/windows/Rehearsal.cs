@@ -55,6 +55,10 @@ public static class Rehearsal
         Shot("for-you-arriving");
         await Task.Delay(6000);
         Shot("for-you");
+        var first = s.Shortlist.Picks.Select(p => p.Choice).Concat(s.Shortlist.Ranked).Concat(s.Shortlist.Unrated).First();
+        s.Open(new(first.Id, first.Name, first));
+        await Task.Delay(7000);
+        Shot("model");
         s.Go(Place.Machine);
         await Task.Delay(1500);
         Shot("this-pc");
@@ -63,8 +67,6 @@ public static class Rehearsal
         s.Search("gemma 3");
         await Task.Delay(5000);
         if (s.SearchError is { } y) throw new CoreException(y);
-        s.Select(s.Hits.FirstOrDefault(h => h.Prediction is not null) ?? s.Hits[0]);
-        await Task.Delay(6000);
         Shot("browse");
         if (Environment.GetEnvironmentVariable("RUNIT_FETCH") is { } id) await Fetch(s, id);
         s.Go(Place.Library);
@@ -117,7 +119,7 @@ public static class Rehearsal
         var d = new DrawingVisual();
         using (var c = d.RenderOpen())
         {
-            c.DrawRectangle(Theme.Paper, null, new(0, 0, v.ActualWidth, v.ActualHeight));
+            c.DrawRectangle(Theme.Ground, null, new(0, 0, v.ActualWidth, v.ActualHeight));
             c.DrawRectangle(new VisualBrush(v) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new(0, 0, v.ActualWidth, v.ActualHeight) }, null, new(0, 0, v.ActualWidth, v.ActualHeight));
         }
         b.Render(d);

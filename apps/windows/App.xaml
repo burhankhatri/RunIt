@@ -7,49 +7,49 @@
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="Button">
           <Border x:Name="b" Background="Transparent" BorderThickness="2" BorderBrush="Transparent" CornerRadius="4"><ContentPresenter /></Border>
-          <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Ink}" /></Trigger></ControlTemplate.Triggers>
+          <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Text}" /></Trigger></ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value></Setter>
     </Style>
-    <Style x:Key="Solid" TargetType="Button">
+    <Style x:Key="Block" TargetType="Button">
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
       <Setter Property="Cursor" Value="Hand" />
-      <Setter Property="Height" Value="40" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Padding" Value="14,0" />
       <Setter Property="HorizontalAlignment" Value="Left" />
-      <Setter Property="Foreground" Value="{DynamicResource Paper}" />
+      <Setter Property="Background" Value="{DynamicResource Orange}" />
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="{DynamicResource Ink}" BorderBrush="Transparent" BorderThickness="2" CornerRadius="6" Padding="16,0"><ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" /></Border>
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="2" CornerRadius="8" Padding="{TemplateBinding Padding}"><ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" /></Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.88" /></Trigger>
-            <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.76" /></Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Marker}" /></Trigger>
-            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Opacity" Value="0.4" /></Trigger>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.9" /></Trigger>
+            <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="RenderTransform"><Setter.Value><TranslateTransform Y="2" /></Setter.Value></Setter></Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Text}" /></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Opacity" Value="0.45" /></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value></Setter>
     </Style>
-    <Style x:Key="Outline" TargetType="Button">
+    <Style x:Key="Plain" TargetType="Button">
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
       <Setter Property="Cursor" Value="Hand" />
-      <Setter Property="Height" Value="30" />
+      <Setter Property="Height" Value="32" />
       <Setter Property="HorizontalAlignment" Value="Left" />
-      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="b" Background="Transparent" BorderBrush="{DynamicResource Rule}" BorderThickness="1" CornerRadius="6" Padding="12,0"><ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" /></Border>
+          <Border x:Name="b" Background="{DynamicResource Raised}" BorderBrush="Transparent" BorderThickness="2" CornerRadius="8" Padding="12,0"><ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" /></Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource Wash}" /></Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Ink}" /></Trigger>
-            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Opacity" Value="0.4" /></Trigger>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource Off}" /></Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Orange}" /></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Opacity" Value="0.45" /></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value></Setter>
     </Style>
     <Style x:Key="Field" TargetType="TextBox">
-      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-      <Setter Property="CaretBrush" Value="{DynamicResource Ink}" />
-      <Setter Property="SelectionBrush" Value="{DynamicResource Marker}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+      <Setter Property="CaretBrush" Value="{DynamicResource Text}" />
+      <Setter Property="SelectionBrush" Value="{DynamicResource Orange}" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -63,7 +63,7 @@
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="ScrollBar">
           <Track x:Name="PART_Track" IsDirectionReversed="True">
-            <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="{DynamicResource Rule}" CornerRadius="3" Margin="1,2" /></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+            <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="{DynamicResource Off}" CornerRadius="3" Margin="1,2" /></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
           </Track>
         </ControlTemplate>
       </Setter.Value></Setter>

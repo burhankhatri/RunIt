@@ -14,7 +14,7 @@ apps/macos (SwiftUI)      apps/windows (WPF, .NET 10)      crates/runit-cli
                          huggingbay.xyz (HTTPS)
 ```
 
-JSON goes in and out of `runit_call(method, params)`. Progress arrives on one event callback, from any thread. Both apps hold no logic beyond display.
+JSON goes in and out of `runit_call(method, params)`. Progress arrives on one event callback, from any thread. Both apps hold no logic beyond display. Both are dark only, in one visual system: charcoal, flat colour blocks, pixel figures. A model keeps one tint and one creature everywhere.
 
 ## runit-core
 
@@ -31,6 +31,7 @@ JSON goes in and out of `runit_call(method, params)`. Progress arrives on one ev
 | `recommend` | picks and ranked lists |
 | `download`, `items` | resumable verified downloads; two at once; library list |
 | `run` | time a real model; chat through `llama-server` on 127.0.0.1 with a one-time key |
+| `creature` | a pixel creature for any name: two 10 by 10 frames, always the same for the same name |
 | `app` | named calls for the apps |
 
 ## Files on disk
@@ -47,7 +48,7 @@ Context assumed for memory: 8192. Comfortable: 80% of capacity. Unified memory k
 
 ## Environment variables
 
-`RUNIT_DATA_DIR`, `RUNIT_ENGINE_DIR`, and for checking builds `RUNIT_SHOTS`, `RUNIT_LOOK`, `RUNIT_FILM`, `RUNIT_RETEST`, `RUNIT_FETCH`. Installers: `RUNIT_REPO`, `RUNIT_BASE`, `RUNIT_NO_OPEN`.
+`RUNIT_DATA_DIR`, `RUNIT_ENGINE_DIR`, and for checking builds `RUNIT_SHOTS`, `RUNIT_FILM`, `RUNIT_RETEST`, `RUNIT_FETCH`. Installers: `RUNIT_REPO`, `RUNIT_BASE`, `RUNIT_NO_OPEN`.
 
 ## Releases
 

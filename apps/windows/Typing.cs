@@ -15,11 +15,11 @@ public readonly struct Reveal(double shown, int count)
     public bool Done => shown >= count;
 }
 
-/// Text that writes itself behind a marker caret. The whole text is laid out from the start, so nothing shifts.
+/// Text that writes itself behind a block caret. The whole text is laid out from the start, so nothing shifts.
 public sealed class Typed : Grid
 {
     private readonly TextBlock text;
-    private readonly Rectangle caret = new() { Fill = Theme.Marker, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed };
+    private readonly Rectangle caret = new() { Fill = Theme.Orange, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Visibility = Visibility.Collapsed };
     private readonly Stopwatch clock = new();
     private readonly double speed, delay;
     private readonly Action? done;
@@ -81,25 +81,29 @@ public sealed class Typed : Grid
 }
 
 /// A sample reply written at exactly the speed a model is predicted to write.
-public sealed class SpeedPreview : Grid
+public sealed class SpeedPreview : TextBlock
 {
     private readonly Stopwatch clock = Stopwatch.StartNew();
-    private readonly TextBlock text;
+    private readonly string whole;
     private readonly int[] ends;
     private readonly double speed;
+    private readonly Run written = new(), ahead = new() { Foreground = Brushes.Transparent };
     private int shown = -1;
 
-    public SpeedPreview(double tokensPerSecond, bool code)
+    public SpeedPreview(double tokensPerSecond, bool code, int limit)
     {
         speed = Math.Max(tokensPerSecond, 0.1);
-        var tokens = code ? Samples.Code : Samples.Prose;
+        var tokens = (code ? Samples.Code : Samples.Prose).Take(limit).ToList();
         ends = new int[tokens.Count + 1];
         for (var i = 0; i < tokens.Count; i++) ends[i + 1] = ends[i] + tokens[i].Length;
-        text = code ? Ui.Text(string.Concat(tokens), Theme.Mono, 12.5, line: 19) : Ui.Text(string.Concat(tokens), Theme.Reading, 16, line: 25);
+        whole = string.Concat(tokens);
+        (FontFamily, FontSize, Foreground, TextWrapping) = (Theme.Mono, 13, Theme.Ink, TextWrapping.Wrap);
+        (LineHeight, LineStackingStrategy) = (21, LineStackingStrategy.BlockLineHeight);
         System.Windows.Automation.AutomationProperties.SetName(this, $"Sample text written at {Show.Speed(tokensPerSecond)} tokens a second");
-        Children.Add(text);
-        if (Theme.Still) return;
-        text.TextEffects = [new() { PositionStart = 0, PositionCount = ends[^1], Foreground = Brushes.Transparent }];
+        if (Theme.Still) { Text = whole; return; }
+        Inlines.Add(written);
+        Inlines.Add(ahead);
+        ahead.Text = whole;
         Loaded += (_, _) => { CompositionTarget.Rendering -= Tick; CompositionTarget.Rendering += Tick; };
         Unloaded += (_, _) => CompositionTarget.Rendering -= Tick;
     }
@@ -110,7 +114,8 @@ public sealed class SpeedPreview : Grid
         var n = Math.Min(ends.Length - 1, (int)(clock.Elapsed.TotalSeconds % (length + 2.4) * speed));
         if (n == shown) return;
         shown = n;
-        text.TextEffects = ends[n] < ends[^1] ? [new() { PositionStart = ends[n], PositionCount = ends[^1] - ends[n], Foreground = Brushes.Transparent }] : null;
+        written.Text = whole[..ends[n]];
+        ahead.Text = whole[ends[n]..];
     }
 }
 
@@ -131,45 +136,4 @@ public static class Samples
     }
     public static readonly List<string> Prose = Split("Tides are the ocean answering the moon. Its gravity pulls the near side of the Earth a little harder than the far side, and the water stretches into two bulges. The planet turns beneath them, so most coasts rise and fall twice a day. The sun joins in as well. When all three line up, the range is widest, and sailors call it a spring tide.");
     public static readonly List<string> Code = Split("def moving_average(values, window):\n    total = 0.0\n    out = []\n    for i, v in enumerate(values):\n        total += v\n        if i >= window:\n            total -= values[i - window]\n        if i >= window - 1:\n            out.append(total / window)\n    return out\n");
-}
-
-/// A figure that rolls up to its value.
-public sealed class Rolling : TextBlock
-{
-    private static readonly DependencyProperty ShownProperty = DependencyProperty.Register("Shown", typeof(double), typeof(Rolling), new(0.0, (d, e) => ((Rolling)d).Text = Show.Speed((double)e.NewValue)));
-    public Rolling(double value, double size)
-    {
-        (FontFamily, FontSize, Foreground, Text) = (Theme.Display, size, Theme.Ink, "0");
-        (LineHeight, LineStackingStrategy) = (size, LineStackingStrategy.BlockLineHeight);
-        if (Theme.Still) SetValue(ShownProperty, value);
-        else BeginAnimation(ShownProperty, new DoubleAnimation(0, value, TimeSpan.FromSeconds(0.6)) { EasingFunction = Ui.Ease });
-    }
-}
-
-/// Text a highlighter has been drawn across.
-public sealed class Marked : Grid
-{
-    public Marked(string s, double size, double delay)
-    {
-        HorizontalAlignment = HorizontalAlignment.Left;
-        var text = Ui.Text(s, Theme.Display, size, Theme.Dark ? Theme.Ink : Theme.OnMarker, italic: true);
-        text.Margin = new(size * 0.12, 0, size * 0.16, 0);
-        Margin = new(-size * 0.12, 0, 0, 0);
-        var stroke = new Path { Fill = Theme.Marker, RenderTransform = new ScaleTransform(Theme.Still ? 1 : 0, 1) };
-        // On a canvas, so the stroke follows the words and never sizes them.
-        Children.Add(new Canvas { Children = { stroke } });
-        SizeChanged += (_, e) =>
-        {
-            var (w, h) = (e.NewSize.Width, e.NewSize.Height);
-            stroke.Data = Geometry.Parse(FormattableString.Invariant($"M0,{h * 0.15} L{w},{h * 0.10} L{w - 3},{h * 0.94} L2,{h * 0.98} Z"));
-        };
-        Children.Add(text);
-        if (Theme.Still) { text.Foreground = Theme.OnMarker; return; }
-        var at = TimeSpan.FromSeconds(delay);
-        var sweep = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.55)) { BeginTime = at, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
-        stroke.RenderTransform.BeginAnimation(ScaleTransform.ScaleXProperty, sweep);
-        var ink = new SolidColorBrush(((SolidColorBrush)text.Foreground).Color);
-        text.Foreground = ink;
-        ink.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(Theme.OnMarker.Color, TimeSpan.FromSeconds(0.4)) { BeginTime = at });
-    }
 }

@@ -68,16 +68,16 @@ original publisher or an allow-listed quantizer.
 
 ## Look and motion
 
-References on Mobbin: Noom "Based on your answers, Sam…" (full-screen serif reveal), Co–Star
-(editorial serif verdict), Cal AI plan generation (live checklist under a big figure), Vercel model
-list (dense numeric table), Krea model picker (list and detail), Canva proposal (sage paper, forest
-ink, italic contrast), Tripadvisor (marker-highlight band).
+Chosen by the owner on 2026-11-24 from three Mobbin-based directions. The first look (sage paper, serif) was rejected.
 
-- A lab report that writes itself. Sage paper, forest ink, and a highlighter that marks the answer.
-- Newsreader for voice, Geist for interface, Geist Mono for figures. All OFL, bundled.
-- **Signature:** a sample reply types at the model's predicted speed, so 47 tokens/s is felt, not
-  only read. Animation here is data.
-- Reduced motion shows finished text.
+References on Mobbin: Mistral Le Chat agents (charcoal, flat bright blocks, pixel glyphs), Vercel model list (dense numeric rows).
+
+- Charcoal ground, flat blocks in orange, yellow, white, red and blue, ink type on blocks.
+- Inter for interface, JetBrains Mono for anything that types, Jersey 15 for figures. (The mockup's Pixelify Sans draws 5 like S.)
+- Every model, and the computer itself, has a pixel creature generated from its name. It walks in two frames, hops on hover and hurries while working.
+- **Signature:** a sample reply types at the model's predicted speed. Animation is data.
+- The test builds the computer's creature one block at a time as it progresses.
+- Reduced motion shows finished text and still creatures.
 
 ## Errors
 

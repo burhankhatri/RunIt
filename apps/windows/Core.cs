@@ -62,6 +62,9 @@ public sealed class Core : IDisposable
         finally { gate.ExitReadLock(); }
     }
 
+    /// Two frames of ten rows. Pure arithmetic, so it answers at once.
+    public int[][] Creature(string name) { try { return Ask("creature", new { name }).Deserialize<int[][]>(Json) ?? []; } catch (CoreException) { return []; } }
+
     public Task<T> Call<T>(string method, object? p = null) => Task.Run(() => Ask(method, p).Deserialize<T>(Json) ?? throw new CoreException("RunIt gave an empty answer"));
     public Task Run(string method, object? p = null) => Task.Run(() => { Ask(method, p); });
 
