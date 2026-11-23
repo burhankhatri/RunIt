@@ -11,7 +11,6 @@ enum Rehearsal {
     static func begin(_ store: Store) {
         guard let folder else { return }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        if let look = env["RUNIT_LOOK"] { NSApp.appearance = NSAppearance(named: look == "dark" ? .darkAqua : .aqua) }
         Task {
             do { try await walk(store) } catch { say("FAILED \(error.localizedDescription)"); exit(1) }
             say("REHEARSAL OK")
@@ -40,23 +39,27 @@ enum Rehearsal {
         try await until("suggestions", 240) { store.shortlist != nil || store.shortlistError != nil }
         if let e = store.shortlistError { throw CoreError(message: e) }
         if (store.shortlist?.ranked.count ?? 0) + (store.shortlist?.unrated.count ?? 0) == 0 { throw CoreError(message: "no suggestions") }
-        store.place = .machine
+        store.go(.machine)
         store.entered = true
         try await pause(1.2)
         shot("this-computer")
-        store.place = .forYou
+        store.go(.forYou)
         try await film("for-you", seconds: 3)
         shot("for-you")
-        withAnimation(.settle) { store.place = .browse }
+        if let c = store.shortlist?.picks.first?.choice ?? store.shortlist?.ranked.first {
+            withAnimation(.settle) { store.opened = Opened(id: c.id, name: c.name, seed: c) }
+            try await film("model", seconds: 2)
+            try await pause(6)
+            shot("model")
+        }
+        withAnimation(.settle) { store.go(.browse) }
         try await until("search", 60) { !store.hits.isEmpty || store.searchError != nil }
         store.query = "gemma 3"
         store.search()
         try await pause(5)
         if let e = store.searchError { throw CoreError(message: e) }
-        withAnimation(.settle) { store.browsing = store.hits.first { $0.prediction != nil } ?? store.hits.first }
-        try await pause(6)
         shot("browse")
-        withAnimation(.settle) { store.place = .library }
+        withAnimation(.settle) { store.go(.library) }
         try await pause(1)
         shot("library")
         if let i = store.items.first(where: \.runnable) {

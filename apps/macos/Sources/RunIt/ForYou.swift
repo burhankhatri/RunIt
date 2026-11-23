@@ -3,152 +3,202 @@ import SwiftUI
 
 struct ForYou: View {
     @Environment(Store.self) private var store
-    @State private var selected: String?
-
     var body: some View {
         if let s = store.shortlist {
-            HStack(spacing: 0) {
-                ScrollView { list(s).padding(.horizontal, 40).padding(.top, 50).padding(.bottom, 40) }.scrollIndicators(.never)
-                Rectangle().fill(Color.rule).frame(width: 1).ignoresSafeArea()
-                if let c = choice(s) {
-                    DetailPane(id: c.id, seed: c, code: pickFor(s, c)?.role == "code").frame(width: 400)
-                }
-            }
-            .onAppear { if selected == nil { selected = s.picks.first?.choice.id ?? s.ranked.first?.id ?? s.unrated.first?.id } }
+            ScrollView { page(s).padding(.horizontal, 36).padding(.top, 44).padding(.bottom, 36) }.scrollIndicators(.never)
         } else if let e = store.shortlistError {
             VStack(alignment: .leading, spacing: 16) {
-                Text("The catalog is out of reach.").font(.display(40))
-                Text(e).font(.sans(15)).foregroundStyle(Color.faint)
-                Button("Try again") { Task { await store.recommend() } }.buttonStyle(Solid())
+                Creature(name: "offline", side: 100, color: .alarm)
+                Text("The catalog is out of reach").font(.bold(26))
+                Text(e).font(.sans(15)).foregroundStyle(Color.soft)
+                Button("Try again") { Task { await store.recommend() } }.buttonStyle(Block())
             }
-            .frame(maxWidth: 520, alignment: .leading)
+            .frame(maxWidth: 480, alignment: .leading)
         } else {
-            VStack(alignment: .leading, spacing: 18) {
-                Typed(text: "Reading the catalog.", font: .display(40), perSecond: 30)
-                GeometryReader { g in
-                    Rectangle().fill(Color.rule)
-                    Rectangle().fill(Color.ink).frame(width: g.size.width * (store.catalogProgress ?? 0)).animation(.smooth, value: store.catalogProgress)
-                }
-                .frame(width: 320, height: 2)
-                Text("Sizing up every model hosted on Hugging Bay.").font(.sans(14)).foregroundStyle(Color.faint)
+            VStack(spacing: 22) {
+                Creature(name: store.report?.machine.cpu ?? "RunIt", side: 120, color: .orange, pace: 0.2)
+                Text("Sizing up every model on Hugging Bay").font(.bold(18))
+                Blocks(share: store.catalogProgress ?? 0, count: 30)
             }
         }
     }
 
-    private func choice(_ s: Shortlist) -> Choice? {
-        (s.picks.map(\.choice) + s.ranked + s.unrated).first { $0.id == selected }
-    }
-    private func pickFor(_ s: Shortlist, _ c: Choice) -> Pick? { s.picks.first { $0.choice.id == c.id } }
-
-    private func list(_ s: Shortlist) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let best = s.picks.first {
-                Verdict(pick: best)
-            } else {
-                Text("Nothing rated fits this computer comfortably.").font(.display(40))
-                Text("Smaller models below may still be worth a try.").font(.sans(15)).foregroundStyle(Color.faint).padding(.top, 10)
+    /// Up to three cards: the picks, then the next best so there is always a choice.
+    private func cards(_ s: Shortlist) -> [(Choice, String, Bool)] {
+        var out: [(Choice, String, Bool)] = s.picks.prefix(3).map { p in
+            let spare = Show.memory(max(0, p.choice.prediction.capacityBytes - p.choice.prediction.needBytes))
+            let line = switch p.role {
+            case "best": p.choice.prediction.tokensPerS >= 10 ? "Best for this Mac. \(spare) to spare." : "The best this Mac can run, slowly."
+            case "quick": "Quickest worth using."
+            case "code": "Best for code."
+            default: p.choice.prediction.tier == .tight ? "Smartest it can hold. A tight fit." : "Smartest it can hold."
             }
-            VStack(spacing: 0) {
-                ForEach(Array(s.picks.enumerated()), id: \.element.id) { n, p in
-                    PickRow(pick: p, on: selected == p.choice.id) { withAnimation(.settle) { selected = p.choice.id } }
-                        .modifier(Rise(order: n))
-                    Hairline()
+            return (p.choice, line, p.role == "code")
+        }
+        for c in s.ranked + s.unrated where out.count < 3 && !out.contains(where: { $0.0.id == c.id }) {
+            out.append((c, c.rating == nil ? "Popular, not rated yet." : "Rated \(c.rating!.rating). Runs well too.", false))
+        }
+        return out
+    }
+
+    private func page(_ s: Shortlist) -> some View {
+        let cards = cards(s)
+        let shown = Set(cards.map(\.0.id))
+        let ranked = s.ranked.filter { !shown.contains($0.id) }.prefix(12)
+        let unrated = s.unrated.filter { !shown.contains($0.id) }
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(s.picks.isEmpty ? "Nothing rated fits comfortably" : "Your Mac runs these well").font(.bold(27)).tracking(-0.6)
+            Text(line).font(.sans(14)).foregroundStyle(Color.soft).padding(.top, 6)
+            Shelf {
+                ForEach(Array(cards.enumerated()), id: \.element.0.id) { n, c in
+                    Card(choice: c.0, line: c.1, code: c.2, big: n == 0).modifier(Arrive(order: n))
                 }
             }
-            .overlay(alignment: .top) { Hairline() }
-            .padding(.top, 36)
-
-            if s.ranked.count > 0 {
-                heading("Rated, and runs here", "Rating: LMArena, \(s.ratingsDate). Higher is better.")
-                table(s.ranked.prefix(14).map { $0 })
+            .padding(.top, 22)
+            if !ranked.isEmpty {
+                heading("More that run here", "LMArena rating, \(s.ratingsDate)")
+                table(Array(ranked))
             }
-            if !s.unrated.isEmpty {
-                heading("Popular, not rated yet", "From the model's own publisher, by downloads.")
-                table(s.unrated)
+            if !unrated.isEmpty {
+                heading("Popular, not rated yet", "From the model's own publisher")
+                table(unrated)
             }
         }
-        .frame(maxWidth: 720, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: 1180, alignment: .leading).frame(maxWidth: .infinity)
+    }
+
+    private var line: String {
+        guard let r = store.report else { return "" }
+        return "\(r.machine.cpu), \(Int((r.machine.ramBytes / 1_073_741_824).rounded())) GB. Tested at \(Int(r.bytesPerS / 1e9)) GB of model a second."
     }
 
     private func heading(_ t: String, _ sub: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(t).font(.display(26))
-            Text(sub).font(.sans(12.5)).foregroundStyle(Color.faint)
+        HStack(alignment: .firstTextBaseline) {
+            Text(t).font(.bold(16))
+            Spacer()
+            Text(sub).font(.sans(12.5)).foregroundStyle(Color.soft)
         }
-        .padding(.top, 48).padding(.bottom, 14)
+        .padding(.top, 34).padding(.bottom, 10)
     }
 
     private func table(_ rows: [Choice]) -> some View {
         VStack(spacing: 0) {
-            Hairline()
             ForEach(rows) { c in
-                ModelRow(name: c.name, sub: c.variant.label + ", " + Show.size(c.variant.size), rating: c.rating?.rating, prediction: c.prediction, on: selected == c.id) {
-                    withAnimation(.settle) { selected = c.id }
-                }
                 Hairline()
+                ModelRow(name: c.name, sub: Show.size(c.variant.size), rating: c.rating?.rating, prediction: c.prediction) {
+                    withAnimation(.settle) { store.opened = Opened(id: c.id, name: c.name, seed: c) }
+                }
             }
         }
     }
 }
 
-/// Fade and lift, one after another.
-struct Rise: ViewModifier {
+/// One wide card, then narrower ones.
+private struct Shelf: Layout {
+    private let gap: CGFloat = 14
+    private func widths(_ total: CGFloat, _ n: Int) -> [CGFloat] {
+        guard n > 0 else { return [] }
+        let room = total - gap * CGFloat(n - 1), part = room / (1.55 + CGFloat(n - 1))
+        return [n == 1 ? total : part * 1.55] + Array(repeating: part, count: n - 1)
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let w = proposal.width ?? 900
+        let h = zip(subviews, widths(w, subviews.count)).map { $0.sizeThatFits(.init(width: $1, height: nil)).height }.max() ?? 0
+        return CGSize(width: w, height: h)
+    }
+    func placeSubviews(in b: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = b.minX
+        for (v, w) in zip(subviews, widths(b.width, subviews.count)) {
+            v.place(at: .init(x: x, y: b.minY), proposal: .init(width: w, height: b.height))
+            x += w + gap
+        }
+    }
+}
+
+/// Cards drop in one after another.
+private struct Arrive: ViewModifier {
     let order: Int
     @Environment(\.accessibilityReduceMotion) private var still
-    @State private var up = false
+    @State private var here = false
     func body(content: Content) -> some View {
-        content.opacity(up || still ? 1 : 0).offset(y: up || still ? 0 : 10)
-            .onAppear { withAnimation(.settle.delay(0.55 + Double(order) * 0.09)) { up = true } }
+        content.opacity(here || still ? 1 : 0).offset(y: here || still ? 0 : 24)
+            .onAppear { withAnimation(.spring(response: 0.45, dampingFraction: 0.72).delay(0.05 + Double(order) * 0.08)) { here = true } }
     }
 }
 
-private struct Verdict: View {
-    let pick: Pick
+private struct Card: View {
+    let choice: Choice
+    let line: String
+    let code: Bool
+    let big: Bool
     @Environment(Store.self) private var store
-    private var chip: String { store.report?.machine.cpu ?? "computer" }
+    @State private var over = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Typed(text: "Your \(chip) is at its best with", font: .display(46), perSecond: 50, caret: false)
-            Marked(text: pick.choice.name, size: 52, delay: 0.7)
-            Text(sentence).font(.sans(16)).lineSpacing(4).foregroundStyle(Color.faint).padding(.top, 14).frame(maxWidth: 520, alignment: .leading)
+        let tint = store.tint(choice.name)
+        VStack(spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                tint
+                if big {
+                    HStack(alignment: .top, spacing: 26) {
+                        Creature(name: choice.name, side: 110).offset(y: over ? -8 : 0)
+                        SpeedPreview(tokensPerSecond: choice.prediction.tokensPerS, code: code, size: 13, limit: 26).frame(height: 132)
+                    }
+                    .padding(.top, 24).padding(.leading, 26).padding(.trailing, 20)
+                } else {
+                    Creature(name: choice.name, side: 110).offset(y: over ? -8 : 0).frame(maxWidth: .infinity).padding(.top, 24)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Figure(value: choice.prediction.tokensPerS, size: 64)
+                    Text("tokens/s").font(.bold(12.5)).foregroundStyle(Color.ink)
+                }
+                .padding(.leading, 20).padding(.bottom, 4)
+                .frame(maxHeight: .infinity, alignment: .bottomLeading)
+            }
+            .frame(height: 224)
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(choice.name).font(.bold(16)).lineLimit(1)
+                    Text(line).font(.sans(13)).foregroundStyle(Color.soft).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                if big { Get(id: choice.id, repo: choice.repo, variant: choice.variant, fill: tint) }
+            }
+            .padding(.horizontal, 18).padding(.vertical, 15).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(Color.card)
         }
+        .clipShape(.rect(cornerRadius: 14))
+        .offset(y: over ? -3 : 0)
+        .animation(.hop, value: over)
+        .contentShape(.rect)
+        .onHover { over = $0 }
+        .onTapGesture { open() }
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: "Open") { open() }
     }
-    private var sentence: String {
-        let p = pick.choice.prediction
-        var s = "It should write \(Show.speed(p.tokensPerSLow)) to \(Show.speed(p.tokensPerSHigh)) tokens a second and leave \(Show.memory(max(0, p.capacityBytes - p.needBytes))) of model memory free."
-        let names = ["quick": "the quickest", "code": "best for code", "smart": "the smartest it can hold"]
-        let also = pick.also.compactMap { names[$0] }
-        if !also.isEmpty { s += " Also \(also.joined(separator: " and "))." }
-        return s
-    }
+    private func open() { withAnimation(.settle) { store.opened = Opened(id: choice.id, name: choice.name, seed: choice, code: code) } }
 }
 
-private struct PickRow: View {
-    let pick: Pick
-    let on: Bool
-    let act: () -> Void
-    @State private var over = false
+/// Download, progress, or try it: whatever comes next for this file.
+struct Get: View {
+    let id: String
+    let repo: String
+    let variant: Variant
+    var fill: Color = .orange
+    var label: Color = .ink
+    var tall = false
+    var enabled = true
+    @Environment(Store.self) private var store
     var body: some View {
-        Button(action: act) {
-            HStack(alignment: .firstTextBaseline, spacing: 18) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(pick.title).font(.sans(12.5)).foregroundStyle(Color.faint)
-                    Text(pick.choice.name).font(.display(27))
-                    Text(pick.why).font(.sans(13.5)).foregroundStyle(Color.faint).lineLimit(2).multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 10)
-                VStack(alignment: .trailing, spacing: 0) {
-                    Rolling(value: pick.choice.prediction.tokensPerS, font: .display(38))
-                    Text("tokens/s").font(.sans(11.5)).foregroundStyle(Color.faint)
-                }
+        if let i = store.item(repo: repo, paths: variant.files) {
+            switch i.status {
+            case .ready: Button("Try it") { store.openChat(i.key) }.buttonStyle(Block(fill: fill, label: label, tall: tall)).disabled(!i.runnable)
+            case .paused, .failed: Button(i.status == .paused ? "Resume" : "Try again") { store.act("resume", i.key) }.buttonStyle(Block(fill: fill, label: label, tall: tall))
+            default: Button("\(Int(i.done / max(i.total, 1) * 100))%") { withAnimation(.settle) { store.go(.library) } }.buttonStyle(Block(fill: fill, label: label, tall: tall))
             }
-            .padding(.vertical, 17).padding(.horizontal, 14)
-            .background(on ? Color.sheet : over ? Color.sheet.opacity(0.5) : .clear)
-            .overlay(alignment: .leading) { if on { Rectangle().fill(Color.marker).frame(width: 4) } }
-            .contentShape(.rect)
+        } else {
+            Button("Get \(Show.size(variant.size))") { store.download(id, variant.files) }.buttonStyle(Block(fill: fill, label: label, tall: tall)).disabled(!enabled)
         }
-        .buttonStyle(.plain).onHover { over = $0 }
     }
 }
 
@@ -157,23 +207,24 @@ struct ModelRow: View {
     let sub: String
     var rating: Int?
     let prediction: Prediction?
-    let on: Bool
     let act: () -> Void
+    @Environment(Store.self) private var store
     @State private var over = false
     var body: some View {
         Button(action: act) {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
+                Tile(name: name, side: 34).offset(y: over ? -3 : 0).animation(.hop, value: over)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(.sansBold(14)).lineLimit(1)
-                    Text(sub).font(.sans(12)).foregroundStyle(Color.faint).lineLimit(1)
+                    Text(name).font(.bold(14)).lineLimit(1)
+                    Text(sub).font(.sans(12)).foregroundStyle(Color.soft).lineLimit(1)
                 }
-                Spacer(minLength: 8)
-                if let rating { Text(String(rating)).font(.mono(13)).foregroundStyle(Color.faint).frame(width: 48, alignment: .trailing) }
-                SpeedLabel(prediction: prediction).frame(width: 112, alignment: .trailing)
+                Spacer(minLength: 10)
+                if let p = prediction, p.tier != .tooBig { Blocks(share: p.tokensPerS / 60, color: store.tint(name)) }
+                Text(rating.map(String.init) ?? "").font(.sans(13)).foregroundStyle(Color.soft).frame(width: 50, alignment: .trailing)
+                SpeedLabel(prediction: prediction).frame(width: 106, alignment: .trailing)
             }
-            .padding(.vertical, 10).padding(.horizontal, 14)
-            .background(on ? Color.sheet : over ? Color.sheet.opacity(0.5) : .clear)
-            .overlay(alignment: .leading) { if on { Rectangle().fill(Color.marker).frame(width: 4) } }
+            .padding(.horizontal, 8).frame(height: 54)
+            .background(over ? Color.card : .clear, in: .rect(cornerRadius: 8))
             .contentShape(.rect)
         }
         .buttonStyle(.plain).onHover { over = $0 }
@@ -185,16 +236,14 @@ struct SpeedLabel: View {
     var body: some View {
         if let p = prediction {
             if p.tier == .tooBig {
-                Text("too big").font(.sans(13)).foregroundStyle(Color.faint)
+                Text("too big").font(.sans(13)).foregroundStyle(Color.soft)
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    if p.tier != .comfortable { Text(p.tier == .tight ? "tight" : "split").font(.sans(11)).foregroundStyle(Color.alarm) }
-                    Text((p.rough ? "~" : "") + Show.speed(p.tokensPerS)).font(.monoBold(15))
-                    Text("tok/s").font(.sans(11)).foregroundStyle(Color.faint)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    if p.tier != .comfortable { Text(p.tier == .tight ? "tight" : "split").font(.bold(11)).foregroundStyle(Color.alarm) }
+                    Text((p.rough ? "~" : "") + Show.speed(p.tokensPerS)).font(.pixel(25))
+                    Text("tok/s").font(.sans(11)).foregroundStyle(Color.soft)
                 }
             }
-        } else {
-            EmptyView()
         }
     }
 }

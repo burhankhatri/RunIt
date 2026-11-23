@@ -60,6 +60,15 @@ final class Core: @unchecked Sendable {
         }
     }
 
+    /// Two frames of ten rows. Pure arithmetic, so it answers at once.
+    func creature(_ name: String) -> [[UInt16]] {
+        struct Ok: Decodable { let ok: [[UInt16]] }
+        guard let body = try? JSONSerialization.data(withJSONObject: ["name": name]),
+              let out = String(decoding: body, as: UTF8.self).withCString({ p in "creature".withCString { runit_call(app, $0, p) } }) else { return [] }
+        defer { runit_free(out) }
+        return (try? JSONDecoder().decode(Ok.self, from: Data(bytes: out, count: strlen(out))))?.ok ?? []
+    }
+
     func run(_ method: String, _ params: [String: Any] = [:]) async throws {
         let body = try JSONSerialization.data(withJSONObject: params)
         struct Failure: Decodable { let error: String? }

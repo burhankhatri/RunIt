@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "runit-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "runit-core",
  "serde_json",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "runit-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "flate2",
  "fs4",
@@ -399,7 +399,7 @@ dependencies = [
 
 [[package]]
 name = "runit-ffi"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "runit-core",
  "serde_json",

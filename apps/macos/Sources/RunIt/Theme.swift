@@ -3,31 +3,26 @@ import CoreText
 import SwiftUI
 
 extension Color {
-    init(light: UInt32, dark: UInt32) {
-        self.init(nsColor: NSColor(name: nil) { a in
-            let h = a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
-            return NSColor(srgbRed: CGFloat(h >> 16 & 255) / 255, green: CGFloat(h >> 8 & 255) / 255, blue: CGFloat(h & 255) / 255, alpha: 1)
-        })
-    }
-    static let paper = Color(light: 0xE8ECE1, dark: 0x0C1511)
-    static let sheet = Color(light: 0xF3F6EE, dark: 0x131F19)
-    static let ink = Color(light: 0x0F2519, dark: 0xE7EEE4)
-    static let faint = Color(light: 0x56685C, dark: 0x93A599)
-    static let rule = Color(light: 0xCBD3C5, dark: 0x25362C)
-    /// The marker. Text on it is always dark.
-    static let marker = Color(light: 0xF1FB5F, dark: 0xD9EE4E)
-    static let onMarker = Color(light: 0x0F2519, dark: 0x0F2519)
-    static let alarm = Color(light: 0xA8321A, dark: 0xF08A6B)
+    init(_ h: UInt32) { self.init(.sRGB, red: Double(h >> 16 & 255) / 255, green: Double(h >> 8 & 255) / 255, blue: Double(h & 255) / 255) }
+    static let ground = Color(0x1B1B1D)
+    static let card = Color(0x262629)
+    static let raised = Color(0x2E2E32)
+    static let line = Color(0x303034)
+    static let off = Color(0x37373B)
+    static let text = Color(0xF4F4F2)
+    static let soft = Color(0xA6A6AA)
+    static let ink = Color(0x111111)
+    static let orange = Color(0xFF7A00)
+    static let alarm = Color(0xFF6B52)
+    /// Flat blocks. Ink reads on all of them.
+    static let tints: [Color] = [.orange, Color(0xFFD400), Color(0xF4F4F2), Color(0xFF5A3C), Color(0x62C8FF)]
 }
 
 extension Font {
-    static func display(_ s: CGFloat) -> Font { .custom("RunItDisplay-Regular", fixedSize: s) }
-    static func displayItalic(_ s: CGFloat) -> Font { .custom("RunItDisplay-Italic", fixedSize: s) }
-    static func reading(_ s: CGFloat) -> Font { .custom("RunItText-Regular", fixedSize: s) }
     static func sans(_ s: CGFloat) -> Font { .custom("RunItSans-Regular", fixedSize: s) }
-    static func sansBold(_ s: CGFloat) -> Font { .custom("RunItSans-Bold", fixedSize: s) }
+    static func bold(_ s: CGFloat) -> Font { .custom("RunItSans-Bold", fixedSize: s) }
     static func mono(_ s: CGFloat) -> Font { .custom("RunItMono-Regular", fixedSize: s) }
-    static func monoBold(_ s: CGFloat) -> Font { .custom("RunItMono-Bold", fixedSize: s) }
+    static func pixel(_ s: CGFloat) -> Font { .custom("RunItPixel-Regular", fixedSize: s) }
 }
 
 enum Fonts {
@@ -39,61 +34,38 @@ enum Fonts {
 }
 
 extension Animation {
-    static let settle = Animation.spring(response: 0.42, dampingFraction: 0.86)
+    static let settle = Animation.spring(response: 0.38, dampingFraction: 0.84)
+    static let hop = Animation.spring(response: 0.28, dampingFraction: 0.5)
 }
 
-struct Solid: ButtonStyle {
-    @Environment(\.isEnabled) private var enabled
-    func makeBody(configuration c: Configuration) -> some View {
-        c.label.font(.sansBold(14)).foregroundStyle(Color.paper).padding(.horizontal, 18).frame(height: 40)
-            .background(Color.ink.opacity(c.isPressed ? 0.82 : 1), in: .rect(cornerRadius: 6))
-            .opacity(enabled ? 1 : 0.4).contentShape(.rect)
-            .scaleEffect(c.isPressed ? 0.985 : 1).animation(.easeOut(duration: 0.12), value: c.isPressed)
-    }
-}
-
-struct Outline: ButtonStyle {
+/// A flat block. Pressing it sinks it.
+struct Block: ButtonStyle {
+    var fill = Color.orange
+    var label = Color.ink
+    var tall = false
     @Environment(\.isEnabled) private var enabled
     @State private var over = false
     func makeBody(configuration c: Configuration) -> some View {
-        c.label.font(.sans(13)).foregroundStyle(Color.ink).padding(.horizontal, 12).frame(height: 30)
-            .background(Color.ink.opacity(c.isPressed ? 0.1 : over ? 0.05 : 0), in: .rect(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.rule))
-            .opacity(enabled ? 1 : 0.4).contentShape(.rect).onHover { over = $0 }
+        c.label.font(.bold(tall ? 15 : 13)).foregroundStyle(label).lineLimit(1).fixedSize()
+            .padding(.horizontal, tall ? 20 : 14).frame(height: tall ? 44 : 34)
+            .background(fill, in: .rect(cornerRadius: 8))
+            .brightness(over && !c.isPressed ? 0.06 : 0)
+            .offset(y: c.isPressed ? 2 : 0)
+            .opacity(enabled ? 1 : 0.45).contentShape(.rect).onHover { over = $0 }
+            .animation(.easeOut(duration: 0.1), value: c.isPressed)
+    }
+}
+
+struct Plain: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    @State private var over = false
+    func makeBody(configuration c: Configuration) -> some View {
+        c.label.font(.sans(13)).foregroundStyle(Color.text).lineLimit(1).fixedSize().padding(.horizontal, 12).frame(height: 32)
+            .background(c.isPressed ? Color.off : over ? Color.raised : Color.card, in: .rect(cornerRadius: 8))
+            .opacity(enabled ? 1 : 0.45).contentShape(.rect).onHover { over = $0 }
     }
 }
 
 struct Hairline: View {
-    var body: some View { Rectangle().fill(Color.rule).frame(height: 1) }
-}
-
-/// Text a highlighter has been drawn across.
-struct Marked: View {
-    let text: String
-    let size: CGFloat
-    var delay = 0.0
-    @Environment(\.accessibilityReduceMotion) private var still
-    @State private var drawn = false
-    var body: some View {
-        Text(text).font(.displayItalic(size)).foregroundStyle(drawn ? Color.onMarker : Color.ink)
-            .padding(.horizontal, size * 0.12)
-            .background(alignment: .leading) {
-                GeometryReader { g in
-                    Path { p in
-                        // A marker is never quite level.
-                        p.move(to: .init(x: 0, y: g.size.height * 0.16))
-                        p.addLine(to: .init(x: g.size.width, y: g.size.height * 0.10))
-                        p.addLine(to: .init(x: g.size.width - 3, y: g.size.height * 0.93))
-                        p.addLine(to: .init(x: 2, y: g.size.height * 0.97))
-                        p.closeSubpath()
-                    }
-                    .fill(Color.marker)
-                    .mask(alignment: .leading) { Rectangle().frame(width: drawn ? g.size.width : 0) }
-                }
-            }
-            .padding(.leading, -size * 0.12)
-            .onAppear {
-                if still { drawn = true } else { withAnimation(.easeInOut(duration: 0.55).delay(delay)) { drawn = true } }
-            }
-    }
+    var body: some View { Rectangle().fill(Color.line).frame(height: 1) }
 }

@@ -4,6 +4,14 @@ import SwiftUI
 
 enum Place: Hashable { case forYou, browse, library, machine }
 
+/// A model opened from a list.
+struct Opened: Equatable {
+    let id: String
+    let name: String
+    var seed: Choice?
+    var code = false
+}
+
 struct Line: Identifiable, Equatable { let id = UUID(); let text: String }
 struct Turn: Identifiable, Equatable { let id = UUID(); let mine: Bool; var text: String; var thought = "" }
 
@@ -30,13 +38,13 @@ final class Store {
     var entered = false
 
     var place = Place.forYou
+    var opened: Opened?
     var shortlist: Shortlist?
     var catalogProgress: Double?
     var shortlistError: String?
 
     var query = ""
     var hits: [Hit] = []
-    var browsing: Hit?
     var total = 0
     var next: String?
     var searching = false
@@ -69,6 +77,34 @@ final class Store {
     }
 
     static let shared = Store()
+
+    // MARK: looks
+
+    @ObservationIgnored private var tints: [String: Int] = [:]
+
+    func creature(_ name: String) -> [[UInt16]] {
+        if let c = creatureCache[name] { return c }
+        let c = core?.creature(name) ?? []
+        creatureCache[name] = c
+        return c
+    }
+    @ObservationIgnored private var creatureCache: [String: [[UInt16]]] = [:]
+
+    /// A model keeps one colour everywhere. Suggestions take turns, so neighbours differ.
+    func tint(_ name: String) -> Color {
+        let n = tints[name] ?? creature(name).joined().reduce(0) { ($0 &* 31 &+ Int($1)) & 0xFFFF }
+        return Color.tints[n % Color.tints.count]
+    }
+    private func assignTints(_ s: Shortlist) {
+        tints = [:]
+        for c in s.picks.map(\.choice) + s.ranked + s.unrated where tints[c.name] == nil { tints[c.name] = tints.count }
+    }
+
+    func go(_ p: Place) {
+        if chatKey != nil { closeChat() }
+        opened = nil
+        place = p
+    }
 
     func refresh() async {
         guard let s = await attempt({ try await $0.call("state", as: AppState.self) }) else { return }
@@ -111,7 +147,11 @@ final class Store {
     func recommend() async {
         shortlistError = nil
         guard let core else { return }
-        do { shortlist = try await core.call("recommend", as: Shortlist.self) } catch { shortlistError = error.localizedDescription }
+        do {
+            let s = try await core.call("recommend", as: Shortlist.self)
+            assignTints(s)
+            shortlist = s
+        } catch { shortlistError = error.localizedDescription }
         catalogProgress = nil
     }
 
