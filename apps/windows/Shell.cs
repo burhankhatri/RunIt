@@ -147,7 +147,7 @@ public sealed class Running : Grid
     {
         stage.TextAlignment = TextAlignment.Right;
         art.Child = new Building(Store.Current.Report?.Machine.Cpu ?? "this PC", 320);
-        var left = Ui.Stack(art, Ui.Ends(percent, stage.Mid()).Wide(320).Pad(0, 22));
+        var left = Ui.Stack(art, Ui.Columns([(percent, -1), (stage.Mid(), 0)], 16).Wide(320).Pad(0, 22));
         var right = Ui.Stack(lines, foot).Wide(470).Mid().Pad(60);
         Children.Add(Ui.Row(left.Mid(), right).Centre().Mid());
         Lines(); Foot();

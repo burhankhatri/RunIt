@@ -126,9 +126,9 @@ public sealed class ThisPc : Grid
             Ui.Soft($"{m.Cpu}{(m.Gpu is { } x ? ", " + x.Name : "")}, {m.Os}", 14).Pad(0, 6, 0, 20),
             Ui.Columns([
                 (new Border { Height = 190, CornerRadius = new(14), Background = Theme.Orange, Child = new Creature(m.Cpu, 110).Centre().Mid() }, 1),
-                (Stat($"{(int)(r.BytesPerS / 1e9)}", "GB of model read a second", Theme.Tints[1]), 1),
+                (Stat($"{(int)(r.BytesPerS / 1e9)}", "GB read a second", Theme.Tints[1]), 1),
                 (Stat(System.FormattableString.Invariant($"{capacity / 1073741824:0.0}"), "GB free for a model", Theme.Tints[2]), 1),
-                (Stat($"{(int)(r.Calibration.Sustained * 100)}%", "of speed kept after 20 s", Theme.Tints[4]), 1)], 14),
+                (Stat($"{(int)(r.Calibration.Sustained * 100)}%", "speed kept over 20 s", Theme.Tints[4]), 1)], 14),
             Ui.Soft("Writing a token means reading the model's weights once, so the first figure sets every speed in RunIt.", 13.5).Pad(0, 14),
             Ui.Bold("What was timed", 16).Pad(0, 32, 0, 10));
         var most = r.Runs.Count == 0 ? 1 : r.Runs.Max(y => y.Decode);
@@ -140,7 +140,7 @@ public sealed class ThisPc : Grid
                 Height = 46,
                 Child = Ui.Columns([(Ui.Bold($"{Show.Size(y.ModelBytes)} test model", 13.5).Mid().Wide(160), -1), (Ui.Soft(y.Place == "gpu" ? "graphics" : "processor", 13.5).Mid().Wide(80), -1),
                     (new Blocks(y.Decode / most, color: y.Place == "gpu" ? Theme.Orange : Theme.Tints[1]), 0), (Ui.Soft($"reads {Show.Speed(y.Prompt)}", 13).Mid(), -1),
-                    (Ui.Row(Ui.Pixel(Show.Speed(y.Decode), 25), Ui.Soft("tok/s", 11).Foot().Pad(5, 0, 0, 5)).Right().Mid().Wide(96), -1)], 14),
+                    (new Border { Width = 96, Child = Ui.Row(Ui.Pixel(Show.Speed(y.Decode), 25), Ui.Soft("tok/s", 11).Foot().Pad(5, 0, 0, 5)).Right() }.Mid(), -1)], 14),
             });
         }
         list.Children.Add(Ui.Row(Ui.Block("Test again", s.Test), Ui.Plain("Choose models folder", () =>

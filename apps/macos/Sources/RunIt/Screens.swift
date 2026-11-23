@@ -156,9 +156,9 @@ struct ThisMac: View {
                             Creature(name: r.machine.cpu, side: 110)
                         }
                         .frame(maxWidth: .infinity, minHeight: 190).background(Color.orange, in: .rect(cornerRadius: 14))
-                        stat("\(Int(r.bytesPerS / 1e9))", "GB of model read a second", Color.tints[1])
+                        stat("\(Int(r.bytesPerS / 1e9))", "GB read a second", Color.tints[1])
                         stat(capacity(r), "GB free for a model", Color.tints[2])
-                        stat("\(Int(r.calibration.sustained * 100))%", "of speed kept after 20 s", Color.tints[4])
+                        stat("\(Int(r.calibration.sustained * 100))%", "speed kept over 20 s", Color.tints[4])
                     }
                     .padding(.top, 22)
                     Text("Writing a token means reading the model's weights once, so the first figure sets every speed in RunIt.")

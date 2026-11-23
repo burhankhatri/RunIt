@@ -25,7 +25,7 @@ fn agent() -> &'static ureq::Agent {
 }
 
 /// Open a URL, following redirects. `from` and `to` ask for a byte range.
-/// Waits and retries twice when the server says it is busy.
+/// Tries twice more when the connection drops or the server says it is busy.
 pub fn open(url: &str, from: u64, to: Option<u64>) -> Result<Body, String> {
     let mut tries = 0;
     loop {
@@ -33,7 +33,16 @@ pub fn open(url: &str, from: u64, to: Option<u64>) -> Result<Body, String> {
         if from > 0 || to.is_some() {
             r = r.header("Range", format!("bytes={from}-{}", to.map_or(String::new(), |t| t.to_string())));
         }
-        let resp = r.call().map_err(|e| format!("could not reach the server: {e}"))?;
+        let resp = match r.call() {
+            Ok(resp) => resp,
+            // A connection kept open from earlier may have been closed at the other end.
+            Err(_) if tries < 2 => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(300 * tries));
+                continue;
+            }
+            Err(e) => return Err(format!("could not reach the server: {e}")),
+        };
         let status = resp.status().as_u16();
         if matches!(status, 429 | 503) && tries < 2 {
             let wait = resp.headers().get("retry-after").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()).unwrap_or(2u64);

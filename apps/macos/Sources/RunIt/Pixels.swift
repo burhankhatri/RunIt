@@ -6,16 +6,20 @@ extension EnvironmentValues {
     @Entry var resting = false
 }
 
-/// Square cells with no soft edges.
-private func cells(_ rows: [UInt16], _ side: CGFloat, keep: (Int, Int) -> Bool = { _, _ in true }) -> Path {
-    var p = Path()
-    let c = side / 10
-    for (y, row) in rows.enumerated() {
-        for x in 0..<10 where row >> x & 1 == 1 && keep(x, y) {
-            p.addRect(CGRect(x: CGFloat(x) * c, y: CGFloat(y) * c, width: c, height: c))
+/// Square cells with no soft edges. A plain shape: a Canvas would need a working graphics processor.
+private struct Cells: Shape {
+    let rows: [UInt16]
+    var inset: CGFloat = 0
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let c = r.width / 10
+        for (y, row) in rows.enumerated() {
+            for x in 0..<10 where row >> x & 1 == 1 {
+                p.addRect(CGRect(x: r.minX + CGFloat(x) * c, y: r.minY + CGFloat(y) * c, width: c, height: c).insetBy(dx: inset, dy: inset))
+            }
         }
+        return p
     }
-    return p
 }
 
 /// A model's creature, walking on the spot.
@@ -32,9 +36,7 @@ struct Creature: View {
         let frames = store.creature(name)
         TimelineView(.animation(minimumInterval: pace, paused: still || resting)) { t in
             let n = still ? 0 : Int(t.date.timeIntervalSinceReferenceDate / pace) % 2
-            Canvas(rendersAsynchronously: false) { g, _ in
-                if frames.count == 2 { g.fill(cells(frames[n], side), with: .color(color), style: FillStyle(antialiased: false)) }
-            }
+            Cells(rows: frames.count == 2 ? frames[n] : []).fill(color, style: FillStyle(antialiased: false))
         }
         .frame(width: side, height: side)
         .accessibilityHidden(true)
@@ -73,28 +75,25 @@ struct Building: View {
 
     var body: some View {
         let order = order
-        TimelineView(.animation(minimumInterval: 1 / 10, paused: still)) { t in
-            let blink = Int(t.date.timeIntervalSinceReferenceDate * 5) % 2 == 0
-            Canvas { g, _ in draw(&g, order, blink) }
+        let n = progress > 0 ? min(order.count, Int(progress * Double(order.count))) : 0
+        // The block being laid blinks; the rest are solid.
+        let next = progress > 0 && progress < 1 && n < order.count ? rows([order[n]]) : []
+        ZStack {
+            Cells(rows: Array(repeating: 0x3FF, count: 10), inset: 1).fill(Color.card, style: FillStyle(antialiased: false))
+            Cells(rows: rows(Array(order.prefix(n)))).fill(Color.orange, style: FillStyle(antialiased: false))
+            TimelineView(.animation(minimumInterval: 0.2, paused: still)) { t in
+                Cells(rows: next).fill(Color.orange, style: FillStyle(antialiased: false))
+                    .opacity(Int(t.date.timeIntervalSinceReferenceDate * 5) % 2 == 0 ? 1 : 0.25)
+            }
         }
         .frame(width: side, height: side)
         .accessibilityLabel("Test \(Int(progress * 100)) percent done")
     }
 
-    private func draw(_ g: inout GraphicsContext, _ order: [(Int, Int)], _ blink: Bool) {
-        let c: CGFloat = side / 10
-        for y in 0..<10 { for x in 0..<10 {
-            let r = CGRect(x: CGFloat(x) * c + 1, y: CGFloat(y) * c + 1, width: c - 2, height: c - 2)
-            g.fill(Path(r), with: .color(.card))
-        } }
-        guard progress > 0 else { return }
-        let n = Int(progress * Double(order.count))
-        for (i, at) in order.prefix(n + 1).enumerated() {
-            // The block being laid blinks; the rest are solid.
-            let dim = i == n && progress < 1 && !blink
-            let r = CGRect(x: CGFloat(at.0) * c, y: CGFloat(at.1) * c, width: c, height: c)
-            g.fill(Path(r), with: .color(.orange.opacity(dim ? 0.25 : 1)), style: FillStyle(antialiased: false))
-        }
+    private func rows(_ at: [(Int, Int)]) -> [UInt16] {
+        var out = [UInt16](repeating: 0, count: 10)
+        for (x, y) in at { out[y] |= 1 << UInt16(x) }
+        return out
     }
 }
 

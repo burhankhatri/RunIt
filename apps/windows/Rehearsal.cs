@@ -57,7 +57,7 @@ public static class Rehearsal
         Shot("for-you");
         var first = s.Shortlist.Picks.Select(p => p.Choice).Concat(s.Shortlist.Ranked).Concat(s.Shortlist.Unrated).First();
         s.Open(new(first.Id, first.Name, first));
-        await Task.Delay(7000);
+        await Task.Delay(9000);
         Shot("model");
         s.Go(Place.Machine);
         await Task.Delay(1500);
