@@ -3,6 +3,7 @@ pub mod app;
 pub mod bench;
 pub mod catalog;
 pub mod conditions;
+pub mod creature;
 pub mod download;
 pub mod engine;
 pub mod gguf;

@@ -61,3 +61,12 @@ fn nothing_else_uses_the_engine_during_a_test() {
         assert!(e.contains("test is"), "{m}: {e}");
     }
 }
+
+#[test]
+fn creatures_are_drawn_on_request() {
+    let a = open(&dir("g"));
+    let v = a.call("creature", &json!({"name": "Phi-4"})).unwrap();
+    assert_eq!(v.as_array().unwrap().len(), 2);
+    assert_eq!(v[0].as_array().unwrap().len(), 10);
+    assert!(a.call("creature", &json!({})).is_err());
+}
