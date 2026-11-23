@@ -71,11 +71,14 @@ pub struct BenchRow {
     pub prompt: u32,
     pub generate: u32,
     pub depth: u32,
+    /// The best sample: other work can only slow a run down.
     pub tokens_per_s: f64,
+    /// Every sample in order.
+    pub samples: Vec<f64>,
     pub model_bytes: u64,
 }
 
-/// Reads `llama-bench -o json`. Uses the median sample, so one stall does not decide.
+/// Reads `llama-bench -o json`.
 pub fn parse_bench(out: &str) -> Result<Vec<BenchRow>, String> {
     #[derive(Deserialize)]
     struct Raw {
@@ -95,10 +98,13 @@ pub fn parse_bench(out: &str) -> Result<Vec<BenchRow>, String> {
     }
     Ok(raw
         .into_iter()
-        .map(|mut r| {
-            r.samples_ts.sort_by(f64::total_cmp);
-            let mid = r.samples_ts.get(r.samples_ts.len() / 2).copied().unwrap_or(r.avg_ts);
-            BenchRow { prompt: r.n_prompt, generate: r.n_gen, depth: r.n_depth, tokens_per_s: mid, model_bytes: r.model_size }
+        .map(|r| BenchRow {
+            prompt: r.n_prompt,
+            generate: r.n_gen,
+            depth: r.n_depth,
+            tokens_per_s: r.samples_ts.iter().copied().reduce(f64::max).unwrap_or(r.avg_ts),
+            samples: r.samples_ts,
+            model_bytes: r.model_size,
         })
         .collect())
 }
@@ -155,7 +161,7 @@ impl Engine {
 
     pub fn command(&self, name: &str) -> Command {
         let mut c = Command::new(self.tool(name));
-        c.current_dir(&self.dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+        c.current_dir(&self.dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -170,16 +176,18 @@ impl Engine {
         Ok(parse_devices(&run(c, &AtomicBool::new(false), Duration::from_secs(180))?))
     }
 
-    pub fn place_args(place: &Place) -> Vec<String> {
-        match place {
-            Place::Gpu(id) => vec!["-ngl".into(), "99".into(), "-dev".into(), id.clone()],
-            Place::Cpu => vec!["-ngl".into(), "0".into(), "-dev".into(), "none".into()],
-        }
+    pub fn bench(&self, model: &Path, place: &Place, args: &[&str], stop: &AtomicBool) -> Result<Vec<BenchRow>, String> {
+        self.bench_layers(model, place, 99, args, stop)
     }
 
-    pub fn bench(&self, model: &Path, place: &Place, args: &[&str], stop: &AtomicBool) -> Result<Vec<BenchRow>, String> {
+    /// `layers` go to the graphics processor, the rest to the processor.
+    pub fn bench_layers(&self, model: &Path, place: &Place, layers: u32, args: &[&str], stop: &AtomicBool) -> Result<Vec<BenchRow>, String> {
         let mut c = self.command("llama-bench");
-        c.arg("-m").arg(model).args(["-o", "json"]).args(args).args(Self::place_args(place));
+        c.arg("-m").arg(model).args(["-o", "json"]).args(args);
+        match place {
+            Place::Gpu(id) => c.args(["-ngl", &layers.to_string(), "-dev", id]),
+            Place::Cpu => c.args(["-ngl", "0", "-dev", "none"]),
+        };
         parse_bench(&run(c, stop, Duration::from_secs(600))?)
     }
 }
@@ -187,12 +195,15 @@ impl Engine {
 fn run(mut c: Command, stop: &AtomicBool, limit: Duration) -> Result<String, String> {
     let name = Path::new(c.get_program()).file_name().unwrap_or_default().to_string_lossy().into_owned();
     let mut g = Guard(c.spawn().map_err(|e| format!("could not start {name}: {e}"))?);
-    let mut pipe = g.0.stdout.take().ok_or("no output pipe")?;
-    let reader = std::thread::spawn(move || {
-        let mut v = Vec::new();
-        let _ = pipe.read_to_end(&mut v);
-        String::from_utf8_lossy(&v).into_owned()
-    });
+    let drain = |mut pipe: Box<dyn Read + Send>| {
+        std::thread::spawn(move || {
+            let mut v = Vec::new();
+            let _ = pipe.read_to_end(&mut v);
+            String::from_utf8_lossy(&v).into_owned()
+        })
+    };
+    let out = drain(Box::new(g.0.stdout.take().ok_or("no output pipe")?));
+    let log = drain(Box::new(g.0.stderr.take().ok_or("no log pipe")?));
     let start = Instant::now();
     let status = loop {
         if stop.load(Ordering::Relaxed) {
@@ -206,10 +217,10 @@ fn run(mut c: Command, stop: &AtomicBool, limit: Duration) -> Result<String, Str
         }
         std::thread::sleep(Duration::from_millis(20));
     };
-    let out = reader.join().unwrap_or_default();
+    let (out, log) = (out.join().unwrap_or_default(), log.join().unwrap_or_default());
     if status.success() {
-        Ok(out)
-    } else {
-        Err(format!("{name} failed ({status})"))
+        return Ok(out);
     }
+    let why = log.lines().rev().find(|l| l.contains("error") || l.contains("fail") || l.contains("ASSERT")).unwrap_or("no reason given");
+    Err(format!("{name} failed ({status}): {}", why.trim().chars().take(200).collect::<String>()))
 }

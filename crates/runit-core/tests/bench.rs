@@ -11,3 +11,11 @@ fn sizes_fit_memory_and_disk() {
     assert_eq!(sizes(2 * GB, Some(50 * GB)).len(), 2);
     assert!(sizes(12 * GB, Some(300_000_000)).is_empty());
 }
+
+#[test]
+fn sustained_share_compares_the_end_with_the_peak() {
+    assert!((sustained(&[50.0, 49.0, 40.0, 32.0, 30.0, 31.0]) - 0.62).abs() < 0.001);
+    assert_eq!(sustained(&[50.0, 50.0, 50.0]), 1.0);
+    assert_eq!(sustained(&[40.0, 50.0, 51.0, 52.0]), 51.0 / 52.0);
+    assert_eq!(sustained(&[]), 1.0);
+}

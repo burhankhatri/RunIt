@@ -65,7 +65,7 @@ pub fn run(e: &Engine, dir: &Path, emit: &Emit, stop: &AtomicBool) -> Result<Rep
     let check = || if stop.load(Ordering::Relaxed) { Err("stopped".to_string()) } else { Ok(()) };
 
     stage("machine", "Looking at the hardware", 0.0);
-    let m = Machine::detect(e);
+    let mut m = Machine::detect(e);
     finding("cpu", cpu_line(&m), 0.03);
     check()?;
     finding("memory", memory_line(&m), 0.06);
@@ -88,55 +88,67 @@ pub fn run(e: &Engine, dir: &Path, emit: &Emit, stop: &AtomicBool) -> Result<Rep
     let mut runs = Vec::new();
     let (mut on_gpu, mut on_cpu) = (Vec::new(), Vec::new());
     let mut deep = None;
-    let slice = 0.9 / plan.len() as f64;
-    for (i, syn) in plan.iter().enumerate() {
-        let base = 0.06 + slice * i as f64;
-        stage("write", "Building a test model with random weights", base);
+    let mut held = 1.0;
+    let make = |i: usize, at: f64| -> Result<(Temp, Load), String> {
+        check()?;
+        stage("write", "Building a test model with random weights", at);
         let file = Temp(dir.join(format!("test-{i}.gguf")));
-        let bytes = write_synthetic(&file.0, syn).map_err(|e| format!("could not write the test model: {e}"))?;
+        let bytes = write_synthetic(&file.0, &plan[i]).map_err(|e| format!("could not write the test model: {e}"))?;
         check()?;
         let mut head = vec![0; 256 << 10];
         let n = std::fs::File::open(&file.0).and_then(|mut f| f.read(&mut head)).map_err(|e| e.to_string())?;
-        let load = load_from_shape(&read_header(&head[..n])?, bytes);
+        Ok((file, load_from_shape(&read_header(&head[..n])?, bytes)))
+    };
 
-        if let Some(place) = gpu.clone() {
-            if i == 0 {
-                stage("warm", "Waking the graphics processor", base + slice * 0.1);
-                // Compiles shaders the first time, which must not count as speed.
-                if let Err(err) = e.bench(&file.0, &place, &["-p", "32", "-n", "4", "-r", "1"], stop) {
-                    check()?;
-                    finding("gpu", format!("The graphics processor could not run the test, so this uses the processor ({err})."), base + slice * 0.1);
-                    gpu = None;
-                }
+    // Graphics first, while the machine is cool, smallest to largest.
+    for i in 0..plan.len() {
+        let Some(place) = gpu.clone() else { break };
+        let at = 0.08 + 0.5 * i as f64 / plan.len() as f64;
+        let (file, load) = make(i, at)?;
+        if i == 0 {
+            stage("warm", "Waking the graphics processor", at + 0.02);
+            // Compiles shaders the first time, which must not count as speed.
+            if let Err(err) = e.bench(&file.0, &place, &["-p", "32", "-n", "4", "-r", "1"], stop) {
+                check()?;
+                finding("gpu", format!("The graphics processor could not run the test, so this uses the processor. ({err})"), at + 0.03);
+                (gpu, m.gpu) = (None, None);
+                break;
             }
         }
-        if let Some(place) = &gpu {
-            stage("gpu", "Timing it on the graphics processor", base + slice * 0.25);
-            let rows = e.bench(&file.0, place, &["-p", "512", "-n", "48", "-r", "5"], stop)?;
-            let s = sample(&load, &rows)?;
-            runs.push(record("gpu", bytes, &s));
-            finding("gpu-run", run_line(&load, &s, "graphics processor"), base + slice * 0.55);
-            on_gpu.push(s);
-            if i == 1 {
-                // How much slower a long conversation gets.
-                let r = e.bench(&file.0, place, &["-p", "0", "-n", "32", "-d", "2048", "-r", "3"], stop)?;
-                if let Some(r) = r.iter().find(|r| r.generate > 0) {
-                    deep = Some((s, load.kv_bytes_per_token * 2048.0, 1.0 / r.tokens_per_s));
-                }
-            }
+        stage("gpu", "Timing it on the graphics processor", at + 0.05);
+        let s = sample(&load, &e.bench(&file.0, &place, &["-p", "512", "-n", "48", "-r", "4"], stop)?)?;
+        runs.push(record("gpu", load.file_bytes, &s));
+        finding("gpu-run", run_line(&load, &s, "graphics processor"), at + 0.12);
+        on_gpu.push(s);
+        if i == 1 {
+            // How much slower a long conversation gets.
+            let r = e.bench(&file.0, &place, &["-p", "0", "-n", "32", "-d", "2048", "-r", "3"], stop)?;
+            deep = r.iter().find(|r| r.generate > 0).map(|r| (s, load.kv_bytes_per_token * 2048.0, 1.0 / r.tokens_per_s));
         }
-        // The large model on a processor alone is slow and adds little.
-        if i < 2 || gpu.is_none() {
-            stage("cpu", "Timing it on the processor", base + slice * 0.7);
-            let rows = e.bench(&file.0, &Place::Cpu, &["-p", "64", "-n", "16", "-r", "3"], stop)?;
-            let s = sample(&load, &rows)?;
-            runs.push(record("cpu", bytes, &s));
-            finding("cpu-run", run_line(&load, &s, "processor"), base + slice * 0.95);
-            on_cpu.push(s);
+        if i + 1 == plan.len() {
+            stage("steady", "Seeing how it holds up when it gets warm", 0.6);
+            held = steady(e, &file.0, &place, 1.0 / s.decode_s, stop)?;
+            finding("steady", steady_line(held), 0.75);
         }
     }
 
-    stage("fit", "Fitting the speed curve", 0.97);
+    // A processor alone also runs the large one; otherwise it only backs up the graphics processor.
+    let count = if gpu.is_some() { 2 } else { plan.len() };
+    for i in 0..count {
+        let at = 0.76 + 0.2 * i as f64 / count as f64;
+        let (file, load) = make(i, at)?;
+        stage("cpu", "Timing it on the processor", at + 0.01);
+        let s = sample(&load, &e.bench(&file.0, &Place::Cpu, &["-p", "64", "-n", "16", "-r", "3"], stop)?)?;
+        runs.push(record("cpu", load.file_bytes, &s));
+        finding("cpu-run", run_line(&load, &s, "processor"), at + 0.06);
+        on_cpu.push(s);
+        if gpu.is_none() && i + 1 == count {
+            held = steady(e, &file.0, &Place::Cpu, 1.0 / s.decode_s, stop)?;
+            finding("steady", steady_line(held), 0.97);
+        }
+    }
+
+    stage("fit", "Fitting the speed curve", 0.98);
     let cpu = fit(&on_cpu, None).ok_or("the timings were unusable; close heavy apps and test again")?;
     let gpu = match gpu {
         Some(_) => Some(fit(&on_gpu, deep).ok_or("the graphics timings were unusable; close heavy apps and test again")?),
@@ -146,12 +158,34 @@ pub fn run(e: &Engine, dir: &Path, emit: &Emit, stop: &AtomicBool) -> Result<Rep
     finding("bandwidth", format!("It reads {:.0} GB of model every second while it writes.", bytes_per_s / GB), 1.0);
     Ok(Report {
         machine: m,
-        calibration: Calibration { gpu, cpu },
+        calibration: Calibration { gpu, cpu, sustained: held },
         runs,
         taken_at: SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs()),
         seconds: started.elapsed().as_secs_f64(),
         bytes_per_s,
     })
+}
+
+/// End of a run as a share of its peak, at most 1.
+pub fn sustained(samples: &[f64]) -> f64 {
+    let Some(peak) = samples.iter().copied().reduce(f64::max).filter(|p| *p > 0.0) else { return 1.0 };
+    let end = &samples[samples.len().saturating_sub(3)..];
+    (end.iter().sum::<f64>() / end.len() as f64 / peak).min(1.0)
+}
+
+/// About twenty seconds of steady writing.
+fn steady(e: &Engine, file: &Path, place: &Place, speed: f64, stop: &AtomicBool) -> Result<f64, String> {
+    let n = (speed * 2.0).clamp(8.0, 256.0) as u32;
+    let rows = e.bench(file, place, &["-p", "0", "-n", &n.to_string(), "-r", "10"], stop)?;
+    Ok(rows.first().map_or(1.0, |r| sustained(&r.samples)))
+}
+
+fn steady_line(held: f64) -> String {
+    if held > 0.9 {
+        "It holds that speed when it gets warm.".into()
+    } else {
+        format!("It slows to {:.0}% of that when it gets warm.", held * 100.0)
+    }
 }
 
 fn sample(l: &Load, rows: &[BenchRow]) -> Result<Sample, String> {

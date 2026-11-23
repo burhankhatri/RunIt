@@ -10,8 +10,13 @@ serde_json = "1"
 sysinfo = { version = "0.37", default-features = false, features = ["system"] }
 fs4 = "0.13"
 ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier"] }
-sha2 = { version = "0.10", features = ["asm"] }
+sha2 = "0.10"
 flate2 = "1"
+getrandom = "0.3"
+
+# Hardware SHA-256 on Apple silicon. x86 uses its own instructions without this.
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
 
 [features]
 # Tests that need RUNIT_ENGINE_DIR and run the real engine.

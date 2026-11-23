@@ -80,7 +80,7 @@ fn a_deep_sample_sets_the_cost_of_reading_context() {
 
 fn cal() -> Calibration {
     let f = |bw: f64| Fit { decode_s_per_byte: 1.0 / bw, decode_s_per_layer: 0.0, prompt_s_per_param: 1e-12, prompt_s_per_layer: 0.0, kv_s_per_byte: 0.0 };
-    Calibration { gpu: Some(f(100e9)), cpu: f(20e9) }
+    Calibration { gpu: Some(f(100e9)), cpu: f(20e9), sustained: 1.0 }
 }
 
 #[test]
@@ -121,4 +121,15 @@ fn a_long_conversation_is_never_faster() {
     assert!(p.tokens_per_s_deep < p.tokens_per_s);
     assert!(!p.rough);
     assert_eq!(p.context, 8192);
+}
+
+#[test]
+fn a_computer_that_slows_when_hot_says_so() {
+    let m = machine(16, Some((12124, true)));
+    let cool = predict(&load_from_size(2_000_000_000), &m, &cal());
+    let hot = predict(&load_from_size(2_000_000_000), &m, &Calibration { sustained: 0.6, ..cal() });
+    close(hot.tokens_per_s, cool.tokens_per_s, 0.01);
+    close(hot.tokens_per_s_sustained, cool.tokens_per_s * 0.6, 0.01);
+    assert!(hot.tokens_per_s_low <= hot.tokens_per_s_sustained);
+    close(cool.tokens_per_s_sustained, cool.tokens_per_s, 0.01);
 }

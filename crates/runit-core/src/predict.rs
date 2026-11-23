@@ -32,7 +32,12 @@ pub struct Fit {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Calibration { pub gpu: Option<Fit>, pub cpu: Fit }
+pub struct Calibration {
+    pub gpu: Option<Fit>,
+    pub cpu: Fit,
+    /// Speed after a spell of steady work, as a share of peak. Below 1 when heat slows the machine.
+    pub sustained: f64,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -46,7 +51,10 @@ pub struct Prediction {
     pub tokens_per_s: f64,
     pub tokens_per_s_low: f64,
     pub tokens_per_s_high: f64,
+    /// With the whole context in use.
     pub tokens_per_s_deep: f64,
+    /// After a spell of steady work.
+    pub tokens_per_s_sustained: f64,
     pub prompt_tokens_per_s: f64,
     /// Share of layers on the GPU.
     pub gpu_share: f64,
@@ -247,7 +255,8 @@ pub fn predict(l: &Load, m: &Machine, c: &Calibration) -> Prediction {
         need_bytes: need,
         capacity_bytes: capacity,
         tokens_per_s: speed,
-        tokens_per_s_low: speed * (1.0 - margin),
+        tokens_per_s_low: (speed * (1.0 - margin)).min(speed * c.sustained),
+        tokens_per_s_sustained: speed * c.sustained,
         tokens_per_s_high: speed * (1.0 + margin),
         tokens_per_s_deep: rate(seconds(context as f64)),
         prompt_tokens_per_s: rate(prompt_s),

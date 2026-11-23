@@ -4,7 +4,7 @@ const GB: u64 = 1_000_000_000;
 fn v(label: &str, bits: f64, size: u64) -> Variant { Variant { label: label.into(), bits, size, files: vec![FileRow { path: format!("m-{label}.gguf"), size, sha256: format!("{label}{size}"), url: "https://huggingbay.xyz/api/downloads/x".into() }] } }
 fn e(repo: &str, vs: Vec<Variant>) -> Entry { Entry { id: repo.to_lowercase(), repo: repo.into(), kind: "llm".into(), license: "apache-2.0".into(), downloads: 10, variants: vs } }
 fn m() -> Machine { Machine { os: "t".into(), cpu: "t".into(), cores: 8, threads: 8, performance_cores: 4, ram_bytes: 16 << 30, ram_free_bytes: 8 << 30, gpu: Some(Device { id: "MTL0".into(), name: "M".into(), total_mib: 12124, free_mib: 12124, integrated: true }) } }
-fn c() -> Calibration { let f = |bw: f64| Fit { decode_s_per_byte: 1.0 / bw, decode_s_per_layer: 0.0, prompt_s_per_param: 1e-12, prompt_s_per_layer: 0.0, kv_s_per_byte: 0.0 }; Calibration { gpu: Some(f(100e9)), cpu: f(30e9) } }
+fn c() -> Calibration { let f = |bw: f64| Fit { decode_s_per_byte: 1.0 / bw, decode_s_per_layer: 0.0, prompt_s_per_param: 1e-12, prompt_s_per_layer: 0.0, kv_s_per_byte: 0.0 }; Calibration { gpu: Some(f(100e9)), cpu: f(30e9), sustained: 1.0 } }
 fn run(es: &[Entry]) -> Shortlist { shortlist(es, &Ratings::bundled(), &m(), &c(), &|v| vec![None; v.len()]) }
 fn role<'a>(s: &'a Shortlist, r: &str) -> Option<&'a str> { s.picks.iter().find(|p| p.role == r).map(|p| p.choice.repo.as_str()) }
 
@@ -41,7 +41,7 @@ fn one_model_appears_once_preferring_its_own_publisher() {
     es.push(e("unsloth/granite-4.2-8b-GGUF", vec![v("Q4_K_M", 4.9, 53 * GB / 10)]));
     es.push(e("nobody/granite-4.2-8b-GGUF", vec![v("Q4_K_M", 4.9, 53 * GB / 10)]));
     let s = run(&es);
-    let same: Vec<_> = s.ranked.iter().filter(|c| c.rating.name == "Granite 4.2 8B").map(|c| c.repo.as_str()).collect();
+    let same: Vec<_> = s.ranked.iter().filter(|c| c.name == "Granite 4.2 8B").map(|c| c.repo.as_str()).collect();
     assert_eq!(same, ["ibm-granite/granite-4.2-8b-GGUF"]);
 }
 
@@ -71,4 +71,26 @@ fn header_loads_replace_the_size_estimate() {
     let es = [e("ibm-granite/granite-4.2-8b-GGUF", vec![v("Q4_K_M", 4.9, 53 * GB / 10)])];
     let s = shortlist(&es, &Ratings::bundled(), &m(), &c(), &|vs| vs.iter().map(|v| Some(Load { from_header: true, touched_bytes: 1e9, ..load_from_size(v.size) })).collect());
     assert!(!s.ranked[0].prediction.rough && s.ranked[0].prediction.tokens_per_s > 90.0);
+}
+
+#[test]
+fn a_file_far_too_small_to_be_the_named_model_is_not_that_model() {
+    // ggml-org/gpt-oss-120b-GGUF also ships a 0.8 GB helper for it.
+    let s = run(&[e("ggml-org/gpt-oss-120b-GGUF", vec![v("Q8_0", 8.5, 8 * GB / 10)])]);
+    assert!(s.ranked.is_empty());
+    // "E4B" and "8x7B" style names are left alone; "26B A4B" is judged on 26B.
+    assert_eq!(run(&[e("ggml-org/gemma-3n-E4B-it-GGUF", vec![v("Q4_K_M", 4.9, 42 * GB / 10)])]).ranked.len(), 1);
+}
+
+#[test]
+fn popular_models_without_a_rating_are_kept_apart() {
+    let s = run(&[
+        Entry { downloads: 500, ..e("LiquidAI/LFM2.5-8B-A1B-GGUF", vec![v("Q4_K_M", 4.9, 5 * GB)]) },
+        Entry { downloads: 900, ..e("somebody/Qwen3.8-9B-Distill-GGUF", vec![v("Q4_K_M", 4.9, 5 * GB)]) },
+        Entry { downloads: 100, ..e("Qwen/Qwen3-4B-GGUF", vec![v("Q5_K_M", 5.7, 3 * GB)]) },
+        Entry { downloads: 800, ..e("Qwen/Qwen3-30B-A3B-Coder-GGUF", vec![v("Q4_K_M", 4.9, 18 * GB)]) },
+    ]);
+    assert!(s.ranked.is_empty() && s.picks.is_empty());
+    assert_eq!(s.unrated.iter().map(|c| c.repo.as_str()).collect::<Vec<_>>(), ["LiquidAI/LFM2.5-8B-A1B-GGUF", "Qwen/Qwen3-4B-GGUF"]);
+    assert!(s.unrated.iter().all(|c| c.rating.is_none()));
 }

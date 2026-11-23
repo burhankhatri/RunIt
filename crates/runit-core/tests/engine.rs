@@ -34,14 +34,15 @@ fn no_devices_means_none() {
 }
 
 #[test]
-fn reads_bench_rows_by_median_sample_around_log_noise() {
+fn reads_bench_rows_by_best_sample_around_log_noise() {
     let out = r#"noise
 [
  {"n_prompt":512,"n_gen":0,"n_depth":0,"avg_ts":400.0,"samples_ts":[500.0,390.0,400.0],"model_size":1060047360},
  {"n_prompt":0,"n_gen":64,"n_depth":4096,"avg_ts":63.0,"samples_ts":[],"model_size":1060047360}
 ]"#;
     let r = parse_bench(out).unwrap();
-    assert_eq!(r[0], BenchRow { prompt: 512, generate: 0, depth: 0, tokens_per_s: 400.0, model_bytes: 1060047360 });
+    // Other work can only slow a run down, so the best sample is the machine's own speed.
+    assert_eq!(r[0], BenchRow { prompt: 512, generate: 0, depth: 0, tokens_per_s: 500.0, samples: vec![500.0, 390.0, 400.0], model_bytes: 1060047360 });
     assert_eq!((r[1].depth, r[1].tokens_per_s), (4096, 63.0));
     assert!(parse_bench("").is_err());
     assert!(parse_bench("[]").is_err());
