@@ -67,3 +67,55 @@ fn discrete_capacity_is_free_video_memory_and_no_gpu_means_ram() {
     assert_eq!(machine(32 * GIB, None).capacity(), 24 * GIB);
     assert_eq!(machine(32 * GIB, Some(dev(8192, 7300, false))).ram_capacity(), 24 * GIB);
 }
+
+fn alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    { std::process::Command::new("kill").args(["-0", &pid.to_string()]).stderr(std::process::Stdio::null()).status().unwrap().success() }
+    #[cfg(windows)]
+    { String::from_utf8_lossy(&std::process::Command::new("tasklist").args(["/FI", &format!("PID eq {pid}")]).output().unwrap().stdout).contains(&pid.to_string()) }
+}
+/// A long-running child that prints its own process id first, so the test can watch it.
+fn sleeper() -> (Guard, u32) {
+    use std::io::{BufRead, BufReader};
+    #[cfg(unix)]
+    let mut c = { let mut c = std::process::Command::new("/bin/sh"); c.args(["-c", "echo $$; exec sleep 60"]); c };
+    #[cfg(windows)]
+    let mut c = { let mut c = std::process::Command::new("powershell"); c.args(["-NoProfile", "-Command", "Write-Output $PID; Start-Sleep 60"]); c };
+    c.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
+    let mut g = Guard::spawn(c).unwrap();
+    let mut line = String::new();
+    BufReader::new(g.stdout().unwrap()).read_line(&mut line).unwrap();
+    (g, line.trim().parse().unwrap())
+}
+fn gone_soon(pid: u32) -> bool {
+    (0..50).any(|_| { std::thread::sleep(std::time::Duration::from_millis(100)); !alive(pid) })
+}
+
+#[test]
+fn dropping_a_guard_ends_its_child() {
+    let (g, pid) = sleeper();
+    assert!(alive(pid));
+    drop(g);
+    assert!(gone_soon(pid));
+}
+
+#[test]
+fn a_child_does_not_outlive_a_parent_that_vanishes() {
+    let (mut g, pid) = sleeper();
+    // What the system does to our handles when this process is killed outright.
+    g.let_go();
+    // Asking how it ended also clears the zombie a killed child leaves with a living parent.
+    let ended = (0..50).any(|_| { std::thread::sleep(std::time::Duration::from_millis(100)); g.ended().unwrap().is_some() });
+    assert!(ended && !alive(pid), "child {pid} was left behind");
+}
+
+#[test]
+fn a_guard_reports_how_its_child_ended() {
+    #[cfg(unix)]
+    let c = { let mut c = std::process::Command::new("/bin/sh"); c.args(["-c", "exit 3"]); c };
+    #[cfg(windows)]
+    let c = { let mut c = std::process::Command::new("cmd"); c.args(["/C", "exit 3"]); c };
+    let mut g = Guard::spawn(c).unwrap();
+    let code = (0..100).find_map(|_| { std::thread::sleep(std::time::Duration::from_millis(50)); g.ended().unwrap() }).unwrap();
+    assert_eq!(code.code(), Some(3));
+}

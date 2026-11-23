@@ -1,5 +1,6 @@
 //! Downloads and the library: one list, saved across launches.
 use crate::catalog::FileRow;
+use crate::conditions::Conditions;
 use crate::download::{fetch, part_path, safe_path};
 use crate::hardware::disk_free;
 use crate::predict::Prediction;
@@ -17,7 +18,13 @@ use std::time::Instant;
 pub enum Status { Queued, Active, Paused, Failed, Ready }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Measured { pub tokens_per_s: f64, pub prompt_tokens_per_s: f64 }
+pub struct Measured {
+    pub tokens_per_s: f64,
+    pub prompt_tokens_per_s: f64,
+    /// What was holding the computer back at the time.
+    #[serde(default)]
+    pub conditions: Conditions,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Item {

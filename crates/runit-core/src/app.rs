@@ -1,5 +1,6 @@
 //! What the apps talk to: named calls in, JSON out, events on the side.
 use crate::bench::{self, Report};
+use crate::conditions::Conditions;
 use crate::catalog::{self, FileRow, Index, Variant};
 use crate::engine::{Engine, Place};
 use crate::hardware::disk_free;
@@ -270,8 +271,9 @@ impl App {
             .iter()
             .map(|h| {
                 let mut v = value(h)?;
-                v["name"] = json!(pretty(&h.repo));
-                v["rating"] = value(i.ratings.find(&h.repo))?;
+                let rating = i.ratings.find(&h.repo);
+                v["name"] = json!(rating.map_or_else(|| pretty(&h.repo), |r| r.name.clone()));
+                v["rating"] = value(rating)?;
                 if let Some(e) = index.as_ref().and_then(|x| x.entries.iter().find(|e| e.id == h.id)).filter(|e| e.kind == "llm") {
                     let usual = e.variants.iter().find(|v| v.label == "Q4_K_M").unwrap_or(&e.variants[0]);
                     let load = i.lock().loads.get(&usual.files[0].sha256).map(|l| whole(l, usual));
@@ -304,7 +306,7 @@ impl App {
         let in_variant = |f: &FileRow| d.variants.iter().any(|v| v.files.iter().any(|x| x.path == f.path));
         let capacity = i.lock().report.as_ref().map(|r| r.machine.capacity());
         Ok(json!({
-            "id": d.id, "repo": d.repo, "name": pretty(&d.repo), "license": d.license, "note": d.note,
+            "id": d.id, "repo": d.repo, "name": i.ratings.find(&d.repo).map_or_else(|| pretty(&d.repo), |r| r.name.clone()), "license": d.license, "note": d.note,
             "rating": i.ratings.find(&d.repo), "kind": kind, "variants": variants,
             "others": d.files.iter().filter(|f| !in_variant(f)).collect::<Vec<_>>(),
             "capacity": capacity,
@@ -391,7 +393,7 @@ impl App {
                 &i.stop_chat,
             );
             say(match result {
-                Ok(()) => json!({"type": "chat", "key": key, "kind": "end"}),
+                Ok(()) => json!({"type": "chat", "key": key, "kind": "end", "text": Conditions::now().note()}),
                 Err(e) => json!({"type": "chat", "key": key, "kind": "failed", "error": e}),
             });
         });

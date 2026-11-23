@@ -1,4 +1,5 @@
 //! Run a downloaded model: measure it, or talk to it.
+use crate::conditions::Conditions;
 use crate::engine::{Engine, Guard, Place};
 use crate::items::Measured;
 use serde::Deserialize;
@@ -12,9 +13,11 @@ use std::time::{Duration, Instant};
 
 /// Time a real model. `gpu_layers` of 99 means all of them.
 pub fn measure(e: &Engine, model: &Path, place: &Place, gpu_layers: u32, stop: &AtomicBool) -> Result<Measured, String> {
+    let before = Conditions::now();
     let rows = e.bench_layers(model, place, gpu_layers, &["-p", "256", "-n", "64", "-r", "3"], stop)?;
     let find = |gen: bool| rows.iter().find(|r| (r.generate > 0) == gen).map(|r| r.tokens_per_s).ok_or("the engine gave no timing");
-    Ok(Measured { tokens_per_s: find(true)?, prompt_tokens_per_s: find(false)? })
+    let after = Conditions::now();
+    Ok(Measured { tokens_per_s: find(true)?, prompt_tokens_per_s: find(false)?, conditions: Conditions { hot: before.hot || after.hot, ..after } })
 }
 
 #[derive(Debug, PartialEq)]
@@ -70,14 +73,14 @@ impl Server {
         };
         // Through the environment, so it does not show in the process list.
         c.env("LLAMA_API_KEY", &key).stdout(Stdio::null()).stderr(Stdio::null());
-        let mut child = Guard(c.spawn().map_err(|e| format!("could not start the model: {e}"))?);
+        let mut child = Guard::spawn(c).map_err(|e| format!("could not start the model: {e}"))?;
         let base = format!("http://127.0.0.1:{port}");
         let start = Instant::now();
         loop {
             if stop.load(Ordering::Relaxed) {
                 return Err("stopped".into());
             }
-            if let Ok(Some(_)) = child.0.try_wait() {
+            if let Ok(Some(_)) = child.ended() {
                 return Err("the model could not be loaded. It may need more memory than is free, or a newer engine".into());
             }
             if local().get(format!("{base}/health")).call().is_ok_and(|r| r.status() == 200) {

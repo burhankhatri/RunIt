@@ -1,4 +1,5 @@
 //! Time the real engine on generated models and fit a speed curve.
+use crate::conditions::Conditions;
 use crate::engine::{BenchRow, Engine, Place};
 use crate::gguf::{read_header, write_synthetic, Synthetic};
 use crate::hardware::{disk_free, Machine};
@@ -22,6 +23,9 @@ pub struct Run { pub place: String, pub model_bytes: u64, pub decode: f64, pub p
 pub struct Report {
     pub machine: Machine,
     pub calibration: Calibration,
+    /// What was holding the computer back when the test began.
+    #[serde(default)]
+    pub conditions: Conditions,
     pub runs: Vec<Run>,
     pub taken_at: u64,
     pub seconds: f64,
@@ -70,6 +74,10 @@ pub fn run(e: &Engine, dir: &Path, emit: &Emit, stop: &AtomicBool) -> Result<Rep
     check()?;
     finding("memory", memory_line(&m), 0.06);
     check()?;
+    let conditions = Conditions::now();
+    if let Some(note) = conditions.note() {
+        finding("conditions", note.into(), 0.07);
+    }
 
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     // Left over from a crash or a power cut.
@@ -159,6 +167,7 @@ pub fn run(e: &Engine, dir: &Path, emit: &Emit, stop: &AtomicBool) -> Result<Rep
     Ok(Report {
         machine: m,
         calibration: Calibration { gpu, cpu, sustained: held },
+        conditions,
         runs,
         taken_at: SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs()),
         seconds: started.elapsed().as_secs_f64(),
@@ -182,9 +191,9 @@ fn steady(e: &Engine, file: &Path, place: &Place, speed: f64, stop: &AtomicBool)
 
 fn steady_line(held: f64) -> String {
     if held > 0.9 {
-        "It holds that speed when it gets warm.".into()
+        "Twenty seconds in, it holds that speed.".into()
     } else {
-        format!("It slows to {:.0}% of that when it gets warm.", held * 100.0)
+        format!("Twenty seconds in, it has slowed to {:.0}% of that.", held * 100.0)
     }
 }
 
@@ -222,5 +231,5 @@ fn memory_line(m: &Machine) -> String {
 }
 
 fn run_line(l: &Load, s: &Sample, place: &str) -> String {
-    format!("A {:.1} GB model writes {:.0} tokens a second on the {place}.", l.file_bytes as f64 / GB, 1.0 / s.decode_s)
+    format!("{:.1} GB model, {place}: {:.0} tokens a second.", l.file_bytes as f64 / GB, 1.0 / s.decode_s)
 }

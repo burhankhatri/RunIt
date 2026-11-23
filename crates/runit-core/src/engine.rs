@@ -121,14 +121,105 @@ pub struct Engine {
     dir: PathBuf,
 }
 
-/// A child process that is killed when dropped.
-pub struct Guard(pub Child);
+/// A child process that never outlives this one, however this one ends.
+pub struct Guard {
+    child: Child,
+    leash: Option<Leash>,
+}
+
+impl Guard {
+    pub fn spawn(mut c: Command) -> std::io::Result<Guard> {
+        let mut g = Guard { child: c.spawn()?, leash: None };
+        // Dropping `g` on failure ends the child.
+        g.leash = Some(Leash::attach(&g.child)?);
+        Ok(g)
+    }
+
+    pub fn stdout(&mut self) -> Option<std::process::ChildStdout> {
+        self.child.stdout.take()
+    }
+
+    pub fn stderr(&mut self) -> Option<std::process::ChildStderr> {
+        self.child.stderr.take()
+    }
+
+    pub fn ended(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        let s = self.child.try_wait()?;
+        if s.is_some() {
+            // Its process id may be used again by something else.
+            if let Some(l) = self.leash.take() {
+                l.discard();
+            }
+        }
+        Ok(s)
+    }
+
+    /// Release what keeps the child alive, as the system does when this process ends.
+    pub fn let_go(&mut self) {
+        self.leash = None;
+    }
+}
 
 impl Drop for Guard {
     fn drop(&mut self) {
+        if let Some(l) = self.leash.take() {
+            l.discard();
+        }
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// A watcher that ends the child when our end of its pipe closes.
+#[cfg(unix)]
+struct Leash(Child);
+
+#[cfg(unix)]
+impl Leash {
+    fn attach(child: &Child) -> std::io::Result<Leash> {
+        Command::new("/bin/sh")
+            .args(["-c", &format!("read -r _; kill -9 {}", child.id())])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map(Leash)
+    }
+
+    fn discard(mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
     }
+}
+
+/// A job that ends everything in it when our handle to it closes.
+#[cfg(windows)]
+struct Leash(std::os::windows::io::OwnedHandle);
+
+#[cfg(windows)]
+impl Leash {
+    fn attach(child: &Child) -> std::io::Result<Leash> {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+        use windows_sys::Win32::System::JobObjects::*;
+        let error = std::io::Error::last_os_error;
+        // SAFETY: plain calls with valid handles; the job handle is owned straight away.
+        unsafe {
+            let raw = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if raw.is_null() {
+                return Err(error());
+            }
+            let job = OwnedHandle::from_raw_handle(raw);
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let size = std::mem::size_of_val(&info) as u32;
+            if SetInformationJobObject(raw, JobObjectExtendedLimitInformation, (&raw const info).cast(), size) == 0 || AssignProcessToJobObject(raw, child.as_raw_handle()) == 0 {
+                return Err(error());
+            }
+            Ok(Leash(job))
+        }
+    }
+
+    fn discard(self) {}
 }
 
 impl Engine {
@@ -192,9 +283,9 @@ impl Engine {
     }
 }
 
-fn run(mut c: Command, stop: &AtomicBool, limit: Duration) -> Result<String, String> {
+fn run(c: Command, stop: &AtomicBool, limit: Duration) -> Result<String, String> {
     let name = Path::new(c.get_program()).file_name().unwrap_or_default().to_string_lossy().into_owned();
-    let mut g = Guard(c.spawn().map_err(|e| format!("could not start {name}: {e}"))?);
+    let mut g = Guard::spawn(c).map_err(|e| format!("could not start {name}: {e}"))?;
     let drain = |mut pipe: Box<dyn Read + Send>| {
         std::thread::spawn(move || {
             let mut v = Vec::new();
@@ -202,8 +293,8 @@ fn run(mut c: Command, stop: &AtomicBool, limit: Duration) -> Result<String, Str
             String::from_utf8_lossy(&v).into_owned()
         })
     };
-    let out = drain(Box::new(g.0.stdout.take().ok_or("no output pipe")?));
-    let log = drain(Box::new(g.0.stderr.take().ok_or("no log pipe")?));
+    let out = drain(Box::new(g.stdout().ok_or("no output pipe")?));
+    let log = drain(Box::new(g.stderr().ok_or("no log pipe")?));
     let start = Instant::now();
     let status = loop {
         if stop.load(Ordering::Relaxed) {
@@ -212,7 +303,7 @@ fn run(mut c: Command, stop: &AtomicBool, limit: Duration) -> Result<String, Str
         if start.elapsed() > limit {
             return Err(format!("{name} took too long"));
         }
-        if let Some(s) = g.0.try_wait().map_err(|e| e.to_string())? {
+        if let Some(s) = g.ended().map_err(|e| e.to_string())? {
             break s;
         }
         std::thread::sleep(Duration::from_millis(20));

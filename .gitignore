@@ -1,7 +1,7 @@
 target/
 .build/
 dist/
-engines/
+engines
 bin/
 obj/
 .DS_Store

@@ -45,7 +45,7 @@ fn a_download_finishes_and_survives_a_restart() {
     assert_eq!(r.done, 800_000);
     assert_eq!(std::fs::read(d.join("models/o/r/b.gguf")).unwrap(), data());
     assert_eq!(i.path(&it.key).unwrap(), d.join("models/o/r/a.gguf"));
-    i.set_measured(&it.key, Measured { tokens_per_s: 42.0, prompt_tokens_per_s: 300.0 });
+    i.set_measured(&it.key, Measured { tokens_per_s: 42.0, prompt_tokens_per_s: 300.0, conditions: Default::default() });
     drop(i);
     let again = open(&d);
     assert_eq!(again.list()[0].status, Status::Ready);
