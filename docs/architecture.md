@@ -43,7 +43,7 @@ Only `https://huggingbay.xyz` and the signed storage links it redirects to. `/ap
 
 ## Limits and defaults
 
-Context assumed for memory: 8192. Comfortable: 80% of capacity. Unified memory keeps the larger of 4 GB and 25% for the system. Smooth 15 tok/s, quick 40, patient 6. Headers read for the 28 best-rated candidates plus 8 unrated. Suggested quants: 4 bits or more, under 9. Disk kept free: 1 GiB.
+Context assumed for memory: 8192. Comfortable: 80% of capacity. Unified memory keeps the larger of 4 GB and 25% for the system. Smooth 10 tok/s, quick 40, patient 6. Headers read for the 28 best-rated candidates plus 8 unrated. Suggested quants: 4 bits or more, under 9. Disk kept free: 1 GiB.
 
 ## Environment variables
 

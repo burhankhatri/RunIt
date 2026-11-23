@@ -59,9 +59,9 @@ or under 100%, then partial offload if RAM allows, otherwise it does not fit.
 ## Picks
 
 From comfortable (or, for "smartest", tight) rated models at Q4 or better:
-- **Best for this computer**: highest rating at 15 tokens/s or more.
+- **Best for this computer**: highest rating at 10 tokens/s or more, faster than people read.
 - **Quickest**: highest rating at 40 tokens/s or more.
-- **For code**: highest LMArena coding rating at 15 tokens/s or more.
+- **For code**: highest LMArena coding rating at 10 tokens/s or more.
 - **Smartest it can hold**: highest rating at 6 tokens/s or more, tight allowed.
 Duplicates collapse. One file per base model, choosing the best quant that stays in budget, from the
 original publisher or an allow-listed quantizer.

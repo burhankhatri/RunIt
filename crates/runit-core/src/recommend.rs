@@ -23,8 +23,8 @@ pub struct Pick {
 pub struct Shortlist { pub picks: Vec<Pick>, pub ranked: Vec<Choice>, pub unrated: Vec<Choice>, pub ratings_date: String, pub ratings_source: String }
 
 const MIN_BITS: f64 = 4.0;
-/// Fast enough to read along with comfortably.
-pub const SMOOTH: f64 = 15.0;
+/// Comfortably faster than people read.
+pub const SMOOTH: f64 = 10.0;
 pub const QUICK: f64 = 40.0;
 const PATIENT: f64 = 6.0;
 /// Headers are read for this many of the best-rated candidates.

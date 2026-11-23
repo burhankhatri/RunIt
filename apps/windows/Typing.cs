@@ -7,14 +7,11 @@ using System.Windows.Shapes;
 
 namespace RunIt;
 
-/// Which characters of a text are written, part written, or still to come.
+/// How much of a text is written.
 public readonly struct Reveal(double shown, int count)
 {
-    public const int Trail = 5;
-    public int Solid { get; } = Math.Min(count, Math.Max(0, (int)shown - Trail));
-    public int End { get; } = Math.Max(Math.Min(count, Math.Max(0, (int)shown - Trail)), Math.Min((int)shown, count));
-    public bool Done => Solid >= count;
-    public double Opacity(int i) => Math.Clamp((shown - i) / Trail, 0, 1);
+    public int End { get; } = Math.Clamp((int)shown, 0, count);
+    public bool Done => shown >= count;
 }
 
 /// Text that writes itself behind a marker caret. The whole text is laid out from the start, so nothing shifts.
@@ -60,12 +57,8 @@ public sealed class Typed : Grid
     {
         var n = text.Text.Length;
         var r = new Reveal(shown, n);
-        // A fresh set each time: WPF stops applying effects once one of them covers nothing.
-        var effects = new TextEffectCollection();
-        var ink = ((SolidColorBrush)text.Foreground).Color;
-        for (var i = r.Solid; i < r.End; i++) effects.Add(new() { PositionStart = i, PositionCount = 1, Foreground = new SolidColorBrush(ink) { Opacity = r.Opacity(i) } });
-        if (n > r.End) effects.Add(new() { PositionStart = r.End, PositionCount = n - r.End, Foreground = Brushes.Transparent });
-        text.TextEffects = effects;
+        // One effect only: WPF does not apply several to a TextBlock reliably.
+        text.TextEffects = n > r.End ? [new() { PositionStart = r.End, PositionCount = n - r.End, Foreground = Brushes.Transparent }] : null;
         if (shown > 0 && r.End < n && text.ActualWidth > 0)
         {
             var box = text.ContentStart.GetPositionAtOffset(r.End + 1)?.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward) ?? Rect.Empty;
