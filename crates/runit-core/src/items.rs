@@ -223,6 +223,8 @@ impl Items {
         self.update(key, true, |i| i.measured = Some(m));
     }
 
+    pub fn set_prediction(&self, _key: &str, _p: Prediction) {}
+
     /// Stop every worker. What was fetched stays for next time.
     pub fn close(&self) {
         for s in self.lock().stops.values() {

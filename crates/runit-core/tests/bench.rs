@@ -19,3 +19,13 @@ fn sustained_share_compares_the_end_with_the_peak() {
     assert_eq!(sustained(&[40.0, 50.0, 51.0, 52.0]), 51.0 / 52.0);
     assert_eq!(sustained(&[]), 1.0);
 }
+
+#[test]
+fn weak_graphics_give_way_to_a_quicker_processor() {
+    use runit_core::predict::Sample;
+    let s = |tok: f64| Sample { touched_bytes: 1e9, active_params: 1e9, layers: 20, decode_s: 1.0 / tok, prompt_s: 0.001 };
+    assert!(processor_is_quicker(&s(6.0), &s(20.0)));
+    assert!(!processor_is_quicker(&s(99.0), &s(77.0)));
+    // A near tie stays on graphics, which reads prompts faster and leaves the processor free.
+    assert!(!processor_is_quicker(&s(20.0), &s(21.0)));
+}

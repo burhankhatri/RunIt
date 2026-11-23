@@ -132,3 +132,16 @@ fn progress_is_announced() {
     let seen = seen.lock().unwrap();
     assert!(seen.iter().all(|v| v["type"] == "item") && seen.last().unwrap()["item"]["status"] == "ready");
 }
+
+#[test]
+fn predictions_can_be_refreshed_after_a_new_test() {
+    use runit_core::{hardware::Machine, predict::*};
+    let d = dir("j"); let i = open(&d); let u = serve(false);
+    let it = item("id", "o/r", "R", "Q4", vec![row(&u, "a.gguf")], None).unwrap();
+    i.add(it.clone()).unwrap(); wait(&i, &it.key, Status::Ready);
+    let f = Fit { decode_s_per_byte: 1e-11, decode_s_per_layer: 0.0, prompt_s_per_param: 1e-12, prompt_s_per_layer: 0.0, kv_s_per_byte: 0.0 };
+    let m = Machine { os: "t".into(), cpu: "t".into(), cores: 1, threads: 1, performance_cores: 1, ram_bytes: 16 << 30, ram_free_bytes: 1, gpu: None };
+    let p = predict(&load_from_size(400_000), &m, &Calibration { gpu: None, cpu: f, sustained: 1.0 });
+    i.set_prediction(&it.key, p.clone());
+    assert_eq!(i.list()[0].prediction, Some(p));
+}

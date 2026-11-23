@@ -95,3 +95,12 @@ fn popular_models_without_a_rating_are_kept_apart() {
     assert_eq!(s.unrated.iter().map(|c| c.repo.as_str()).collect::<Vec<_>>(), ["LiquidAI/LFM2.5-8B-A1B-GGUF", "Qwen/Qwen3-4B-GGUF"]);
     assert!(s.unrated.iter().all(|c| c.rating.is_none()));
 }
+
+#[test]
+fn a_slow_best_is_not_called_smooth() {
+    let slow = { let f = Fit { decode_s_per_byte: 1.0 / 20e9, decode_s_per_layer: 0.0, prompt_s_per_param: 1e-12, prompt_s_per_layer: 0.0, kv_s_per_byte: 0.0 }; Calibration { gpu: None, cpu: f, sustained: 1.0 } };
+    let s = shortlist(&[e("ibm-granite/granite-4.2-3b-GGUF", vec![v("Q4_K_M", 4.9, 22 * GB / 10)])], &Ratings::bundled(), &m(), &slow, &|v| vec![None; v.len()]);
+    assert_eq!(s.picks[0].role, "best");
+    assert!(s.picks[0].choice.prediction.tokens_per_s < 15.0);
+    assert!(!s.picks[0].why.contains("smooth"), "{}", s.picks[0].why);
+}

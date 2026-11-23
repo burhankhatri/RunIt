@@ -182,6 +182,11 @@ pub fn sustained(samples: &[f64]) -> f64 {
     (end.iter().sum::<f64>() / end.len() as f64 / peak).min(1.0)
 }
 
+/// Whether models should run on the processor although graphics work.
+pub fn processor_is_quicker(_graphics: &Sample, _processor: &Sample) -> bool {
+    false
+}
+
 /// About twenty seconds of steady writing.
 fn steady(e: &Engine, file: &Path, place: &Place, speed: f64, stop: &AtomicBool) -> Result<f64, String> {
     let n = (speed * 2.0).clamp(8.0, 256.0) as u32;
