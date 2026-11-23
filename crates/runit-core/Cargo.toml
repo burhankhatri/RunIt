@@ -1,0 +1,19 @@
+[package]
+name = "runit-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = { version = "0.37", default-features = false, features = ["system"] }
+fs4 = "0.13"
+
+[features]
+# Tests that need RUNIT_ENGINE_DIR and run the real engine.
+live = []
+
+[[test]]
+name = "live"
+required-features = ["live"]
