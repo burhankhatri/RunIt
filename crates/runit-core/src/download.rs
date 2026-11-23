@@ -84,7 +84,8 @@ pub fn fetch(url: &str, dest: &Path, size: u64, sha256: &str, progress: &mut dyn
             Ok(body) => {
                 if done > 0 && body.status != 206 {
                     // Range ignored: start over rather than append the beginning again.
-                    out.set_len(0).map_err(io)?;
+                    // Windows does not let a file opened for appending be cut short.
+                    drop(File::create(&part).map_err(io)?);
                     hash = Sha256::new();
                     done = 0;
                 }

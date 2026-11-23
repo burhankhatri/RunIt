@@ -194,7 +194,7 @@ impl Leash {
 
 /// A job that ends everything in it when our handle to it closes.
 #[cfg(windows)]
-struct Leash(std::os::windows::io::OwnedHandle);
+struct Leash(#[allow(dead_code, reason = "held open, never read")] std::os::windows::io::OwnedHandle);
 
 #[cfg(windows)]
 impl Leash {
