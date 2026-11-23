@@ -14,9 +14,11 @@ Windows 10 or 11, in PowerShell:
 irm https://raw.githubusercontent.com/burhankhatri/RunIt/main/install.ps1 | iex
 ```
 
-![RunIt on macOS](docs/images/macos.png)
+![Suggestions on a MacBook Air](docs/images/macos.png)
 
-![RunIt on Windows](docs/images/windows.png)
+| One model | The test | Windows |
+|---|---|---|
+| ![A model's page](docs/images/model.png) | ![The test](docs/images/test.png) | ![RunIt on Windows](docs/images/windows.png) |
 
 ## What it does
 

@@ -14,6 +14,7 @@ On shared CI machines, with the processor only, for LFM2.5 230M Q4_K_M:
 |---|---|---|---|
 | Windows, AMD EPYC 9V74 | 203 | 217 | -6.5% |
 | Windows, AMD EPYC 7763 | 138 | 149 | -7.4% |
+| Windows, Intel Xeon 8573C | 90 | 86 | +4.7% |
 | macOS, virtual Apple M1 | 169 | 232 | -27% |
 
 Shared machines vary from minute to minute. The last one falls outside the range the app showed.
