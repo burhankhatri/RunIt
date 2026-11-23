@@ -20,7 +20,7 @@ the prediction against reality.
    and vote count. A model matches only when its name matches exactly after removing packaging
    words. Fine-tunes inherit nothing. Unmatched models say "unrated" and are not headline picks.
 5. **The loop closes.** After a download RunIt measures real speed and shows it next to the
-   prediction. The measurement then replaces the prediction for that file.
+   prediction, and says when the computer was hot or on battery at the time.
 
 ## Not predicted
 

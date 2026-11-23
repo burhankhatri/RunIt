@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -73,6 +73,14 @@ impl Inner {
 
     fn engine(&self) -> Result<&Engine, String> {
         self.engine.as_ref().ok_or_else(|| "the engine is missing from this install. Reinstall RunIt".into())
+    }
+
+    /// A second user of the engine would spoil the test's timing.
+    fn free(&self) -> Result<(), String> {
+        if self.lock().testing {
+            return Err("a test is running, wait for it to finish".into());
+        }
+        Ok(())
     }
 
     fn report(&self) -> Result<Report, String> {
@@ -234,14 +242,9 @@ impl App {
 
     fn bench(&self) -> Result<Value, String> {
         let i = self.inner.clone();
+        i.free()?;
         i.engine()?;
-        {
-            let mut s = i.lock();
-            if s.testing {
-                return Err("a test is already running".into());
-            }
-            s.testing = true;
-        }
+        i.lock().testing = true;
         // Anything else using the graphics processor would spoil the timing.
         self.close_chat(None);
         i.stop_bench.store(false, Ordering::Relaxed);
@@ -338,6 +341,7 @@ impl App {
     fn measure(&self, key: String) -> Result<Value, String> {
         let i = self.inner.clone();
         let items = self.items.clone();
+        i.free()?;
         let path = items.path(&key)?;
         i.engine()?;
         self.close_chat(None);
@@ -365,6 +369,7 @@ impl App {
 
     fn open_chat(&self, key: String) -> Result<Value, String> {
         let i = &self.inner;
+        i.free()?;
         let path = self.items.path(&key)?;
         if i.lock().chat.as_ref().is_some_and(|(k, _)| *k == key) {
             return Ok(Value::Null);
@@ -409,8 +414,9 @@ impl App {
         }
     }
 
-    pub fn models_dir(&self) -> &Path {
-        &self.inner.models
+    #[doc(hidden)]
+    pub fn pretend_testing(&self) {
+        self.inner.lock().testing = true;
     }
 }
 

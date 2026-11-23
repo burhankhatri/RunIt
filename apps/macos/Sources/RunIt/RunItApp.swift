@@ -11,7 +11,6 @@ struct RunItApp: App {
                     store.start()
                     Rehearsal.begin(store)
                 }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in store.core?.close() }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1220, height: 800)

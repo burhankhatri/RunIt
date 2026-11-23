@@ -6,7 +6,8 @@ struct CoreError: LocalizedError {
     var errorDescription: String? { message }
 }
 
-/// The Rust engine. Calls may block on the network, so they run off the main thread.
+/// The Rust engine. Calls may block on the network, so they run off the main thread. It lives as long
+/// as the app: a call may still be on the network at quit, and the engine ends its own children.
 final class Core: @unchecked Sendable {
     private let app: OpaquePointer
     private let queue = DispatchQueue(label: "runit.calls", qos: .userInitiated, attributes: .concurrent)
@@ -73,6 +74,4 @@ final class Core: @unchecked Sendable {
         }
         if let error { throw CoreError(message: error) }
     }
-
-    func close() { runit_close(app) }
 }

@@ -51,3 +51,13 @@ fn a_download_must_come_from_the_live_list() {
     // Callers name a model and files; they never supply links or checksums.
     assert!(a.call("download", &json!({"id": "x"})).is_err());
 }
+
+#[test]
+fn nothing_else_uses_the_engine_during_a_test() {
+    let a = open(&dir("f"));
+    a.pretend_testing();
+    for m in ["measure", "chat.open", "bench.start"] {
+        let e = a.call(m, &json!({"key": "o/r/x.gguf"})).unwrap_err();
+        assert!(e.contains("test is"), "{m}: {e}");
+    }
+}
