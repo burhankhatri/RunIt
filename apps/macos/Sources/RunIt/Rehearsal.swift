@@ -46,8 +46,16 @@ enum Rehearsal {
         store.go(.forYou)
         try await film("for-you", seconds: 3)
         shot("for-you")
+        try await pause(1)
         if let c = store.shortlist?.picks.first?.choice ?? store.shortlist?.ranked.first {
             withAnimation(.settle) { store.opened = Opened(id: c.id, name: c.name, seed: c) }
+            try await hitches("opening a model")
+            for n in 2...3 {
+                withAnimation(.settle) { store.opened = nil }
+                try await hitches("going back")
+                withAnimation(.settle) { store.opened = Opened(id: c.id, name: c.name, seed: c) }
+                try await hitches("opening a model, time \(n)")
+            }
             try await film("model", seconds: 2)
             try await pause(6)
             shot("model")
@@ -100,6 +108,20 @@ enum Rehearsal {
         guard let folder, let png = picture()?.representation(using: .png, properties: [:]) else { return say("no picture of \(name)") }
         try? png.write(to: folder.appending(path: "\(name).png"))
         say(name)
+    }
+
+    /// The longest the main thread went without answering, with nothing being captured.
+    private static func hitches(_ what: String) async throws {
+        let end = Date.now.addingTimeInterval(1.2)
+        var last = Date.now, worst = 0.0, slow = 0
+        while Date.now < end {
+            try await Task.sleep(for: .milliseconds(4))
+            let gap = Date.now.timeIntervalSince(last) * 1000
+            last = .now
+            worst = max(worst, gap)
+            if gap > 34 { slow += 1 }
+        }
+        say(String(format: "%@: longest pause %.0f ms, %d over two frames", what, worst, slow))
     }
 
     /// Frames for checking that motion is smooth.

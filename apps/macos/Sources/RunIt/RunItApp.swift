@@ -78,25 +78,32 @@ struct Notice: View {
 
 struct MainScreen: View {
     @Environment(Store.self) private var store
+    @Environment(\.resting) private var resting
+    private var covered: Bool { store.opened != nil || store.chatKey != nil }
     var body: some View {
         HStack(spacing: 0) {
             Sidebar()
             Rectangle().fill(Color.line).frame(width: 1).ignoresSafeArea()
             ZStack {
-                if store.chatKey != nil {
-                    ChatScreen().transition(.opacity)
-                } else if let o = store.opened {
-                    ModelPage(opened: o).id(o.id).transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    Group {
-                        switch store.place {
-                        case .forYou: ForYou()
-                        case .browse: Browse()
-                        case .library: Library()
-                        case .machine: ThisMac()
-                        }
+                // The list stays put underneath, so coming back costs nothing and keeps its place.
+                Group {
+                    switch store.place {
+                    case .forYou: ForYou()
+                    case .browse: Browse()
+                    case .library: Library()
+                    case .machine: ThisMac()
                     }
-                    .transition(.opacity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
+                .environment(\.resting, resting || covered)
+                .allowsHitTesting(!covered)
+                .accessibilityHidden(covered)
+                if let o = store.opened {
+                    ModelPage(opened: o).id(o.id).transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                if store.chatKey != nil {
+                    ChatScreen().background(Color.ground).transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
