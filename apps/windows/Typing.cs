@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
@@ -22,14 +23,21 @@ public sealed class Typed : Grid
     private readonly Stopwatch clock = new();
     private readonly double speed, delay;
     private readonly Action? done;
+    private readonly string words;
+    private readonly Run written = new(), ahead = new() { Foreground = Brushes.Transparent };
     private bool running, finished;
+    private int last = -1;
 
     public Typed(TextBlock text, double perSecond = 46, double delay = 0, bool showCaret = true, Action? done = null)
     {
-        (this.text, speed, this.delay, this.done) = (text, perSecond, delay, done);
+        (this.text, speed, this.delay, this.done, words) = (text, perSecond, delay, done, text.Text);
         if (showCaret) Children.Add(caret);
         Children.Add(text);
+        System.Windows.Automation.AutomationProperties.SetName(this, words);
         if (Theme.Still) { Loaded += (_, _) => done?.Invoke(); return; }
+        text.Inlines.Clear();
+        text.Inlines.Add(written);
+        text.Inlines.Add(ahead);
         Draw(0);
         Loaded += (_, _) => Begin();
         Unloaded += (_, _) => End();
@@ -41,11 +49,11 @@ public sealed class Typed : Grid
     private void Tick(object? s, EventArgs e)
     {
         var shown = Math.Max(0, (clock.Elapsed.TotalSeconds - delay) * speed);
-        if (new Reveal(shown, text.Text.Length).Done)
+        if (new Reveal(shown, words.Length).Done)
         {
             End();
             finished = true;
-            text.TextEffects = null;
+            text.Text = words;
             caret.Visibility = Visibility.Collapsed;
             done?.Invoke();
             return;
@@ -55,21 +63,20 @@ public sealed class Typed : Grid
 
     private void Draw(double shown)
     {
-        var n = text.Text.Length;
-        var r = new Reveal(shown, n);
-        // One effect only: WPF does not apply several to a TextBlock reliably.
-        text.TextEffects = n > r.End ? [new() { PositionStart = r.End, PositionCount = n - r.End, Foreground = Brushes.Transparent }] : null;
-        if (shown > 0 && r.End < n && text.ActualWidth > 0)
-        {
-            var box = text.ContentStart.GetPositionAtOffset(r.End + 1)?.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward) ?? Rect.Empty;
-            if (!box.IsEmpty)
-            {
-                caret.Margin = new(box.X + 1, box.Y + box.Height * 0.14, 0, 0);
-                (caret.Width, caret.Height) = (Math.Max(5, text.FontSize * 0.36), box.Height * 0.76);
-                caret.Visibility = Visibility.Visible;
-            }
-        }
-        else caret.Visibility = Visibility.Collapsed;
+        var end = new Reveal(shown, words.Length).End;
+        if (end == last) return;
+        last = end;
+        // Both runs are always present, so the words never move. (Text effects would do, but a
+        // TextBlock stops applying them once anything asks it where a character is.)
+        written.Text = words[..end];
+        ahead.Text = words[end..];
+        if (shown <= 0 || end >= words.Length || !text.IsMeasureValid && text.ActualWidth == 0) { caret.Visibility = Visibility.Collapsed; return; }
+        text.UpdateLayout();
+        var box = ahead.ContentStart.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward);
+        if (box.IsEmpty) return;
+        caret.Margin = new(box.X + 1, box.Y + box.Height * 0.14, 0, 0);
+        (caret.Width, caret.Height) = (Math.Max(5, text.FontSize * 0.36), box.Height * 0.76);
+        caret.Visibility = Visibility.Visible;
     }
 }
 
