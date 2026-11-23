@@ -80,7 +80,7 @@ public sealed class DetailPane : Border
         feel.Child = Ui.Stack(
             Ui.Row(new Rolling(p.TokensPerS, 72), side).Pad(0, 10),
             Ui.Soft("This is that speed:", 12).Pad(0, 4, 0, 8),
-            new Border { Background = Theme.Paper, CornerRadius = new(6), Padding = new(16), Height = 214, ClipToBounds = true, Child = new SpeedPreview(p.TokensPerS, code) });
+            new Border { Background = Theme.Paper, CornerRadius = new(6), Padding = new(16), Height = 258, ClipToBounds = true, Child = new SpeedPreview(p.TokensPerS, code) });
     }
 
     private static StackPanel Fit(Prediction p)

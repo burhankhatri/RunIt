@@ -118,7 +118,7 @@ public static class Rehearsal
         using (var c = d.RenderOpen())
         {
             c.DrawRectangle(Theme.Paper, null, new(0, 0, v.ActualWidth, v.ActualHeight));
-            c.DrawRectangle(new VisualBrush(v), null, new(0, 0, v.ActualWidth, v.ActualHeight));
+            c.DrawRectangle(new VisualBrush(v) { ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new(0, 0, v.ActualWidth, v.ActualHeight) }, null, new(0, 0, v.ActualWidth, v.ActualHeight));
         }
         b.Render(d);
         var png = new PngBitmapEncoder { Frames = { BitmapFrame.Create(b) } };

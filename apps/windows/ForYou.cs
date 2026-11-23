@@ -40,7 +40,7 @@ public sealed class ForYou : Grid
         if (all.All(c => c.Id != selected)) selected = all.FirstOrDefault()?.Id;
         ColumnDefinitions.Add(new());
         ColumnDefinitions.Add(new() { Width = new(1) });
-        ColumnDefinitions.Add(new() { Width = new(410) });
+        ColumnDefinitions.Add(new() { Width = new(390) });
 
         list.Children.Clear();
         if (list_.Picks.Count > 0) Verdict(list_.Picks[0]);

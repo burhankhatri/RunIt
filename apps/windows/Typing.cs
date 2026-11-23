@@ -25,24 +25,20 @@ public sealed class Typed : Grid
     private readonly Stopwatch clock = new();
     private readonly double speed, delay;
     private readonly Action? done;
-    private readonly TextEffect rest = new() { Foreground = Brushes.Transparent };
-    private readonly TextEffect[] tail;
-    private bool running;
+    private bool running, finished;
 
     public Typed(TextBlock text, double perSecond = 46, double delay = 0, bool showCaret = true, Action? done = null)
     {
         (this.text, speed, this.delay, this.done) = (text, perSecond, delay, done);
-        tail = [.. Enumerable.Range(0, Reveal.Trail).Select(_ => new TextEffect { PositionCount = 1 })];
         if (showCaret) Children.Add(caret);
         Children.Add(text);
         if (Theme.Still) { Loaded += (_, _) => done?.Invoke(); return; }
-        text.TextEffects = [.. tail, rest];
         Draw(0);
         Loaded += (_, _) => Begin();
         Unloaded += (_, _) => End();
     }
 
-    private void Begin() { if (running || text.TextEffects is null) return; running = true; clock.Restart(); CompositionTarget.Rendering += Tick; }
+    private void Begin() { if (running || finished) return; running = true; clock.Restart(); CompositionTarget.Rendering += Tick; }
     private void End() { if (!running) return; running = false; CompositionTarget.Rendering -= Tick; }
 
     private void Tick(object? s, EventArgs e)
@@ -51,6 +47,7 @@ public sealed class Typed : Grid
         if (new Reveal(shown, text.Text.Length).Done)
         {
             End();
+            finished = true;
             text.TextEffects = null;
             caret.Visibility = Visibility.Collapsed;
             done?.Invoke();
@@ -63,15 +60,12 @@ public sealed class Typed : Grid
     {
         var n = text.Text.Length;
         var r = new Reveal(shown, n);
-        for (var k = 0; k < tail.Length; k++)
-        {
-            var i = r.Solid + k;
-            tail[k].PositionStart = i;
-            tail[k].PositionCount = i < r.End ? 1 : 0;
-            if (i < r.End) tail[k].Foreground = new SolidColorBrush(((SolidColorBrush)text.Foreground).Color) { Opacity = r.Opacity(i) };
-        }
-        rest.PositionStart = r.End;
-        rest.PositionCount = Math.Max(0, n - r.End);
+        // A fresh set each time: WPF stops applying effects once one of them covers nothing.
+        var effects = new TextEffectCollection();
+        var ink = ((SolidColorBrush)text.Foreground).Color;
+        for (var i = r.Solid; i < r.End; i++) effects.Add(new() { PositionStart = i, PositionCount = 1, Foreground = new SolidColorBrush(ink) { Opacity = r.Opacity(i) } });
+        if (n > r.End) effects.Add(new() { PositionStart = r.End, PositionCount = n - r.End, Foreground = Brushes.Transparent });
+        text.TextEffects = effects;
         if (shown > 0 && r.End < n && text.ActualWidth > 0)
         {
             var box = text.ContentStart.GetPositionAtOffset(r.End + 1)?.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward) ?? Rect.Empty;
@@ -93,7 +87,6 @@ public sealed class SpeedPreview : Grid
     private readonly TextBlock text;
     private readonly int[] ends;
     private readonly double speed;
-    private readonly TextEffect rest = new() { Foreground = Brushes.Transparent };
     private int shown = -1;
 
     public SpeedPreview(double tokensPerSecond, bool code)
@@ -106,7 +99,7 @@ public sealed class SpeedPreview : Grid
         System.Windows.Automation.AutomationProperties.SetName(this, $"Sample text written at {Show.Speed(tokensPerSecond)} tokens a second");
         Children.Add(text);
         if (Theme.Still) return;
-        text.TextEffects = [rest];
+        text.TextEffects = [new() { PositionStart = 0, PositionCount = ends[^1], Foreground = Brushes.Transparent }];
         Loaded += (_, _) => { CompositionTarget.Rendering -= Tick; CompositionTarget.Rendering += Tick; };
         Unloaded += (_, _) => CompositionTarget.Rendering -= Tick;
     }
@@ -117,8 +110,7 @@ public sealed class SpeedPreview : Grid
         var n = Math.Min(ends.Length - 1, (int)(clock.Elapsed.TotalSeconds % (length + 2.4) * speed));
         if (n == shown) return;
         shown = n;
-        rest.PositionStart = ends[n];
-        rest.PositionCount = ends[^1] - ends[n];
+        text.TextEffects = ends[n] < ends[^1] ? [new() { PositionStart = ends[n], PositionCount = ends[^1] - ends[n], Foreground = Brushes.Transparent }] : null;
     }
 }
 
@@ -163,8 +155,14 @@ public sealed class Marked : Grid
         var text = Ui.Text(s, Theme.Display, size, Theme.Dark ? Theme.Ink : Theme.OnMarker, italic: true);
         text.Margin = new(size * 0.12, 0, size * 0.16, 0);
         Margin = new(-size * 0.12, 0, 0, 0);
-        var stroke = new Path { Fill = Theme.Marker, Stretch = Stretch.Fill, Margin = new(0, size * 0.12, 0, size * 0.06), Data = Geometry.Parse("M0,6 L100,0 L99.4,96 L0.4,100 Z"), RenderTransform = new ScaleTransform(Theme.Still ? 1 : 0, 1) };
-        Children.Add(stroke);
+        var stroke = new Path { Fill = Theme.Marker, RenderTransform = new ScaleTransform(Theme.Still ? 1 : 0, 1) };
+        // On a canvas, so the stroke follows the words and never sizes them.
+        Children.Add(new Canvas { Children = { stroke } });
+        SizeChanged += (_, e) =>
+        {
+            var (w, h) = (e.NewSize.Width, e.NewSize.Height);
+            stroke.Data = Geometry.Parse(FormattableString.Invariant($"M0,{h * 0.15} L{w},{h * 0.10} L{w - 3},{h * 0.94} L2,{h * 0.98} Z"));
+        };
         Children.Add(text);
         if (Theme.Still) { text.Foreground = Theme.OnMarker; return; }
         var at = TimeSpan.FromSeconds(delay);

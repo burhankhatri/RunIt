@@ -82,7 +82,7 @@ struct DetailPane: View {
             }
             Text("This is that speed:").font(.sans(12)).foregroundStyle(Color.faint).padding(.top, 8)
             SpeedPreview(tokensPerSecond: p.tokensPerS, code: code)
-                .padding(16).frame(height: 214, alignment: .top).clipped()
+                .padding(16).frame(height: 244, alignment: .top).clipped()
                 .background(Color.paper, in: .rect(cornerRadius: 6)).padding(.top, 8)
         }
         .padding(.top, 16)

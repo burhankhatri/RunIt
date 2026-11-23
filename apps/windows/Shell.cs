@@ -17,13 +17,13 @@ public sealed class Shell : Window
 
     public Shell()
     {
-        (Title, Width, Height, MinWidth, MinHeight, Background) = ("RunIt", 1220, 800, 1060, 700, Theme.Paper);
+        (Title, Width, Height, MinWidth, MinHeight, Background) = ("RunIt", 1220, 800, 980, 660, Theme.Paper);
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/RunIt.ico"));
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Ideal);
         UseLayoutRounding = true;
         notice.Background = Theme.Ink;
-        Content = new Grid { Children = { root, notice } };
+        Content = new Grid { Background = Theme.Paper, Children = { root, notice } };
         SourceInitialized += (_, _) => Theme.TitleBar(this);
         hide.Tick += (_, _) => Store.Current.Notify(null);
         Store.Current.Changed += On;

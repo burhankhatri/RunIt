@@ -146,6 +146,16 @@ public static class Ui
         });
     }
 
+    /// A column that fills what it is given, up to a limit, from the left.
+    public static Grid Column(FrameworkElement c, double max)
+    {
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star), MaxWidth = max });
+        g.ColumnDefinitions.Add(new() { Width = new(0.0001, GridUnitType.Star) });
+        g.Children.Add(c);
+        return g;
+    }
+
     /// Listen to the store for as long as an element is on screen.
     public static T Listen<T>(this T e, Action<string> on) where T : FrameworkElement
     {

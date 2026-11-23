@@ -10,7 +10,7 @@ public sealed class Browse : Grid
 {
     private readonly StackPanel rows = new();
     private readonly TextBlock status = Ui.Soft("");
-    private readonly Border pane = new() { Width = 410 };
+    private readonly Border pane = new() { Width = 390 };
     private readonly ScrollViewer scroll;
 
     public Browse()
@@ -18,12 +18,12 @@ public sealed class Browse : Grid
         var s = Store.Current;
         ColumnDefinitions.Add(new());
         ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var hint = Ui.Text("Search every model on Hugging Bay", Theme.Display, 30, Theme.Faint);
+        var hint = Ui.Text("Search every model on Hugging Bay", Theme.Display, 30, Theme.Faint).OneLine();
         hint.IsHitTestVisible = false;
         var box = new TextBox { Style = (Style)Application.Current.Resources["Field"], FontFamily = Theme.Display, FontSize = 30, Text = s.Query };
         System.Windows.Automation.AutomationProperties.SetName(box, "Search every model on Hugging Bay");
         hint.Visibility = box.Text == "" ? Visibility.Visible : Visibility.Collapsed;
-        box.TextChanged += (_, _) => { hint.Visibility = box.Text == "" ? Visibility.Visible : Visibility.Collapsed; s.Search(box.Text); };
+        box.TextChanged += (_, _) => { hint.Visibility = box.Text == "" ? Visibility.Visible : Visibility.Collapsed; if (box.Text != s.Query) s.Search(box.Text); };
         var top = Ui.Stack(new Grid { Children = { hint.Pad(3), box } }, status.Pad(0, 8, 0, 14), Ui.Line());
         DockPanel.SetDock(top, Dock.Top);
         scroll = Ui.Scroll(rows.Pad(0, 0, 0, 30));
@@ -32,7 +32,7 @@ public sealed class Browse : Grid
         SetColumn(pane, 1);
         Children.Add(pane);
         Rows_(); Pane();
-        this.Listen(t => { if (t is "search") Rows_(); if (t is "browsing") { Rows_(); Pane(); } });
+        this.Listen(t => { if (t is "search") { if (box.Text != s.Query) box.Text = s.Query; Rows_(); } if (t is "browsing") { Rows_(); Pane(); } });
         Loaded += (_, _) => { box.Focus(); if (s.Hits.Count == 0) s.Search(s.Query); };
     }
 
@@ -60,15 +60,13 @@ public sealed class Browse : Grid
 
 public sealed class Library : Grid
 {
-    private readonly StackPanel list = new() { MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new(40, 34, 40, 40) };
+    private readonly StackPanel list = new() { Margin = new(40, 34, 40, 40) };
     private readonly Dictionary<string, ItemProgress> live = [];
     private string shape = "";
 
     public Library()
     {
-        list.HorizontalAlignment = HorizontalAlignment.Left;
-        list.Width = 820;
-        Children.Add(Ui.Scroll(list));
+        Children.Add(Ui.Scroll(Ui.Column(list, 900)));
         Build();
         this.Listen(t => { if (t is "items") Build(); });
     }
@@ -139,7 +137,7 @@ public sealed class ThisPc : Grid
         var s = Store.Current;
         if (s.Report is not { } r) return;
         var main = r.Machine.Gpu is { Integrated: false } g ? g.Name : r.Machine.Cpu;
-        var list = new StackPanel { Width = 760, Margin = new(40, 34, 40, 40), HorizontalAlignment = HorizontalAlignment.Left };
+        var list = new StackPanel { Margin = new(40, 34, 40, 40) };
         void Add(UIElement e) => list.Children.Add(e);
         Add(new Typed(Ui.Head($"{main} reads {(int)(r.BytesPerS / 1e9)} GB of model a second.", 46), 60, 0, false));
         Add(Ui.Soft("Writing a token means reading the model's weights once, so that figure sets every speed on these screens.", 15).Max(520).Pad(0, 12, 0, 34));
@@ -165,7 +163,7 @@ public sealed class ThisPc : Grid
         }).Mid().Pad(10)).Pad(0, 30));
         Add(Ui.Fig(s.ModelsDir, 12, Theme.Faint).Pad(0, 10));
         Add(Ui.Text($"Models and files: Hugging Bay. Ratings: LMArena leaderboard dataset, CC BY 4.0, {s.RatingsDate}. Engine: llama.cpp. RunIt {s.Version} sends nothing about this computer anywhere.", Theme.Sans, 12.5, Theme.Faint, line: 18).Max(560).Pad(0, 40));
-        Children.Add(Ui.Scroll(list));
+        Children.Add(Ui.Scroll(Ui.Column(list, 840)));
     }
 }
 
