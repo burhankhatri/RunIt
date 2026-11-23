@@ -34,6 +34,13 @@ pub struct Item {
     #[serde(default)] pub bytes_per_s: f64,
 }
 
+impl Item {
+    /// Finished, and something the engine can load.
+    pub fn runnable(&self) -> bool {
+        self.status == Status::Ready && self.files[0].path.to_lowercase().ends_with(".gguf")
+    }
+}
+
 /// Re-reads the live file list for an id, so a saved checksum or link is never stale.
 pub type Refresh = Arc<dyn Fn(&str) -> Result<Vec<FileRow>, String> + Send + Sync>;
 
@@ -134,7 +141,7 @@ impl Items {
         if let Some(free) = disk_free(&self.0.models) {
             if item.total.saturating_add(busy).saturating_add(SPARE_DISK) > free {
                 let gb = |b: u64| b as f64 / 1e9;
-                return Err(format!("not enough disk space: this needs {:.1} GB and {:.1} GB is free", gb(item.total), gb(free)));
+                return Err(format!("not enough disk space: this needs {:.1} GB with 1 GB kept spare, and {:.1} GB is free", gb(item.total), gb(free)));
             }
         }
         let key = item.key.clone();
@@ -223,7 +230,9 @@ impl Items {
         self.update(key, true, |i| i.measured = Some(m));
     }
 
-    pub fn set_prediction(&self, _key: &str, _p: Prediction) {}
+    pub fn set_prediction(&self, key: &str, p: Prediction) {
+        self.update(key, true, |i| i.prediction = Some(p));
+    }
 
     /// Stop every worker. What was fetched stays for next time.
     pub fn close(&self) {

@@ -24,7 +24,7 @@ JSON goes in and out of `runit_call(method, params)`. Progress arrives on one ev
 | `conditions` | heat (macOS thermal pressure) and battery power |
 | `engine` | locate and run llama.cpp; parse devices and timings; `Guard` ends children even if the app is killed (pipe watcher on Unix, job object on Windows) |
 | `gguf` | read whole or cut-off headers; write random-weight test models |
-| `bench` | the test: up to three generated models, GPU first while cool, 20 s steady run, then CPU |
+| `bench` | the test: up to three generated models, GPU first while cool, 20 s steady run, then CPU; the CPU is chosen when it writes over 15% faster |
 | `predict` | least-squares fit; memory tiers; speed for any model shape, including split loads |
 | `catalog` | Hugging Bay snapshot (SHA-256 checked, cached as `catalog-2.json`), search, file plans, ranged headers |
 | `quality` | LMArena ratings bundled from `data/quality.json`; exact-name matching; publisher trust |

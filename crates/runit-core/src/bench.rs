@@ -150,6 +150,10 @@ pub fn run(e: &Engine, dir: &Path, emit: &Emit, stop: &AtomicBool) -> Result<Rep
         runs.push(record("cpu", load.file_bytes, &s));
         finding("cpu-run", run_line(&load, &s, "processor"), at + 0.06);
         on_cpu.push(s);
+        if i + 1 == count && gpu.is_some() && processor_is_quicker(&on_gpu[i], &s) {
+            (gpu, m.gpu) = (None, None);
+            finding("gpu", "The processor is quicker than the graphics here, so models will run on it.".into(), 0.965);
+        }
         if gpu.is_none() && i + 1 == count {
             held = steady(e, &file.0, &Place::Cpu, 1.0 / s.decode_s, stop)?;
             finding("steady", steady_line(held), 0.97);
@@ -183,8 +187,8 @@ pub fn sustained(samples: &[f64]) -> f64 {
 }
 
 /// Whether models should run on the processor although graphics work.
-pub fn processor_is_quicker(_graphics: &Sample, _processor: &Sample) -> bool {
-    false
+pub fn processor_is_quicker(graphics: &Sample, processor: &Sample) -> bool {
+    processor.decode_s * 1.15 < graphics.decode_s
 }
 
 /// About twenty seconds of steady writing.

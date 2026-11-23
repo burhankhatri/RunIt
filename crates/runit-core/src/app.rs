@@ -14,6 +14,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -147,6 +148,21 @@ fn whole(l: &Load, v: &Variant) -> Load {
     Load { file_bytes: v.size, touched_bytes: l.touched_bytes * f, ..l.clone() }
 }
 
+/// What the library holds is judged by the newest test, from the files themselves.
+fn repredict(items: &Items, r: &Report) {
+    for item in items.list().into_iter().filter(|i| i.runnable()) {
+        let Ok(path) = items.path(&item.key) else { continue };
+        let mut head = Vec::new();
+        // Enough for the whole header, vocabulary included.
+        if std::fs::File::open(path).and_then(|f| f.take(32 << 20).read_to_end(&mut head)).is_err() {
+            continue;
+        }
+        if let Ok(shape) = crate::gguf::read_header(&head) {
+            items.set_prediction(&item.key, predict(&load_from_shape(&shape, item.total), &r.machine, &r.calibration));
+        }
+    }
+}
+
 impl App {
     /// `engine`: where llama.cpp is, or look beside the program.
     pub fn open(data: PathBuf, engine: Option<PathBuf>, emit: Emit) -> Result<App, String> {
@@ -248,6 +264,7 @@ impl App {
         // Anything else using the graphics processor would spoil the timing.
         self.close_chat(None);
         i.stop_bench.store(false, Ordering::Relaxed);
+        let items = self.items.clone();
         std::thread::spawn(move || {
             let result = i.engine().and_then(|e| bench::run(e, &i.data.join("bench"), &i.emit, &i.stop_bench));
             i.lock().testing = false;
@@ -255,6 +272,7 @@ impl App {
                 Ok(r) => {
                     let _ = store::save(&i.data.join("report.json"), &r);
                     i.lock().report = Some(r.clone());
+                    repredict(&items, &r);
                     (i.emit)(json!({"type": "bench", "kind": "done", "report": r}));
                 }
                 Err(e) if e == "stopped" => (i.emit)(json!({"type": "bench", "kind": "stopped"})),

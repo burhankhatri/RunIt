@@ -129,7 +129,11 @@ pub fn shortlist(entries: &[Entry], ratings: &Ratings, m: &Machine, c: &Calibrat
     };
     let smooth = top(SMOOTH, true, &overall);
     add("best", "Best for this computer", smooth.or_else(|| top(PATIENT, false, &overall)), &|c| {
-        format!("The highest-rated model that runs smoothly here, with {} to spare.", gb(c.prediction.capacity_bytes.saturating_sub(c.prediction.need_bytes)))
+        if c.prediction.tokens_per_s >= SMOOTH {
+            format!("The highest-rated model that runs smoothly here, with {} to spare.", gb(c.prediction.capacity_bytes.saturating_sub(c.prediction.need_bytes)))
+        } else {
+            format!("The highest-rated model this computer can run, though slowly, at {:.0} tokens a second.", c.prediction.tokens_per_s)
+        }
     });
     add("quick", "Quickest worth using", top(QUICK, true, &overall), &|c| format!("Writes faster than anyone reads, and rates {} with people who compared it blind.", overall(c)));
     add("code", "Best for code", top(SMOOTH, true, &coding), &|c| format!("Rated {} on coding questions, the highest of what runs smoothly here.", coding(c)));
