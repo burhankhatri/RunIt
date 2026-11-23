@@ -215,7 +215,7 @@ fn check(files: &[String], as_json: bool) -> Result<(), String> {
     };
     let mut rows = vec![];
     for f in files {
-        let path = PathBuf::from(f);
+        let path = PathBuf::from(f).canonicalize().map_err(|e| format!("{f}: {e}"))?;
         let size = path.metadata().map_err(|e| format!("{f}: {e}"))?.len();
         // The same slice of the file the app reads over the network.
         let mut head = vec![];

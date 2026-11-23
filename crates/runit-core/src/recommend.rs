@@ -10,7 +10,14 @@ use std::collections::BTreeMap;
 pub struct Choice { pub id: String, pub repo: String, pub name: String, pub license: String, pub downloads: u64, pub rating: Option<Rating>, pub variant: Variant, pub prediction: Prediction }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Pick { pub role: String, pub title: String, pub why: String, pub choice: Choice }
+pub struct Pick {
+    pub role: String,
+    pub title: String,
+    pub why: String,
+    /// Other roles the same model won.
+    pub also: Vec<String>,
+    pub choice: Choice,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Shortlist { pub picks: Vec<Pick>, pub ranked: Vec<Choice>, pub unrated: Vec<Choice>, pub ratings_date: String, pub ratings_source: String }
@@ -20,8 +27,6 @@ const MIN_BITS: f64 = 4.0;
 pub const SMOOTH: f64 = 15.0;
 pub const QUICK: f64 = 40.0;
 const PATIENT: f64 = 6.0;
-/// A finer quant must still be this fast to replace a smaller one.
-const FINER: f64 = 30.0;
 /// Headers are read for this many of the best-rated candidates.
 const LOOK_CLOSER: usize = 28;
 
@@ -40,11 +45,11 @@ fn plausible(repo: &str, v: &Variant) -> bool {
     named_params(repo).is_none_or(|p| v.size as f64 > p * v.bits / 8.0 * 0.6)
 }
 
-/// The quant to offer: the finest that stays quick, else the smallest at four bits or better.
+/// The quant to offer: the finest that is still quick, else the smallest at four bits or better.
 fn choose<'a>(repo: &str, vs: &'a [Variant], m: &Machine, c: &Calibration, load: &dyn Fn(&Variant) -> Load) -> Option<(&'a Variant, Prediction)> {
     let fair: Vec<_> = vs.iter().filter(|v| v.bits >= MIN_BITS && v.bits < 9.0 && plausible(repo, v)).map(|v| (v, predict(&load(v), m, c))).filter(|(_, p)| p.tier <= Tier::Tight).collect();
     let usual = fair.iter().find(|(v, _)| v.label == "Q4_K_M").or_else(|| fair.first()).cloned();
-    let finer = fair.iter().filter(|(_, p)| p.tier == Tier::Comfortable && p.tokens_per_s >= FINER).max_by(|a, b| a.0.bits.total_cmp(&b.0.bits)).cloned();
+    let finer = fair.iter().filter(|(_, p)| p.tier == Tier::Comfortable && p.tokens_per_s >= QUICK).max_by(|a, b| a.0.bits.total_cmp(&b.0.bits)).cloned();
     match (usual, finer) {
         (Some(u), Some(f)) if f.0.bits > u.0.bits => Some(f),
         (u, f) => u.or(f),
@@ -116,8 +121,10 @@ pub fn shortlist(entries: &[Entry], ratings: &Ratings, m: &Machine, c: &Calibrat
     };
     let mut picks: Vec<Pick> = Vec::new();
     let mut add = |role: &str, title: &str, c: Option<&Choice>, why: &dyn Fn(&Choice) -> String| {
-        if let Some(c) = c.filter(|c| picks.iter().all(|p| p.choice.name != c.name)) {
-            picks.push(Pick { role: role.into(), title: title.into(), why: why(c), choice: c.clone() });
+        let Some(c) = c else { return };
+        match picks.iter_mut().find(|p| p.choice.name == c.name) {
+            Some(p) => p.also.push(role.into()),
+            None => picks.push(Pick { role: role.into(), title: title.into(), why: why(c), also: vec![], choice: c.clone() }),
         }
     };
     let smooth = top(SMOOTH, true, &overall);

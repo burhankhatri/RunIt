@@ -52,10 +52,10 @@ fn unknown_uploaders_are_not_recommended() {
 
 #[test]
 fn a_finer_quant_is_chosen_only_while_it_stays_quick() {
-    // 3B at Q8 is 4.2 GB: 24 tok/s, under the 30 that would justify it. At 3 GB it is 33.
+    // 3B at Q8 is 4.2 GB: 24 tok/s, under the 40 that would justify it. At 2.3 GB it is 43.
     let slow = run(&[e("ibm-granite/granite-4.2-3b-GGUF", vec![v("Q4_K_M", 4.9, 22 * GB / 10), v("Q8_0", 8.5, 42 * GB / 10)])]);
     assert_eq!(slow.ranked[0].variant.label, "Q4_K_M");
-    let quick = run(&[e("ibm-granite/granite-4.2-3b-GGUF", vec![v("Q4_K_M", 4.9, 2 * GB), v("Q6_K", 6.6, 3 * GB)])]);
+    let quick = run(&[e("ibm-granite/granite-4.2-3b-GGUF", vec![v("Q4_K_M", 4.9, 2 * GB), v("Q6_K", 6.6, 23 * GB / 10)])]);
     assert_eq!(quick.ranked[0].variant.label, "Q6_K");
 }
 
@@ -64,6 +64,7 @@ fn a_model_that_is_several_bests_is_shown_once() {
     let s = run(&[e("ibm-granite/granite-4.2-3b-GGUF", vec![v("Q4_K_M", 4.9, 22 * GB / 10)])]);
     assert_eq!(s.picks.len(), 1);
     assert_eq!(s.picks[0].role, "best");
+    assert_eq!(s.picks[0].also, ["quick", "code", "smart"]);
 }
 
 #[test]

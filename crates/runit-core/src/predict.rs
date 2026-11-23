@@ -14,6 +14,8 @@ pub struct Load {
     pub kv_bytes_per_token: f64,
     pub context: u32,
     pub sliding_window: u32,
+    /// Mixture of experts: routing adds work the fit does not see.
+    pub mixture: bool,
     /// False when only the file size was known.
     pub from_header: bool,
 }
@@ -137,6 +139,7 @@ pub fn load_from_shape(s: &Shape, file_bytes: u64) -> Load {
         kv_bytes_per_token: kv,
         context: if s.context > 0 { s.context } else { CONTEXT },
         sliding_window: s.sliding_window,
+        mixture: s.experts > 0,
         from_header: true,
     }
 }
@@ -153,6 +156,7 @@ pub fn load_from_size(file_bytes: u64) -> Load {
         kv_bytes_per_token: 60_000.0 * gb.max(0.1).sqrt(),
         context: CONTEXT,
         sliding_window: 0,
+        mixture: false,
         from_header: false,
     }
 }
@@ -246,7 +250,7 @@ pub fn predict(l: &Load, m: &Machine, c: &Calibration) -> Prediction {
     let speed = rate(seconds(SHALLOW));
     // Widths checked against real models; see docs/accuracy.md.
     let margin = match (l.from_header, tier) {
-        (true, Tier::Comfortable | Tier::Tight) => 0.15,
+        (true, Tier::Comfortable | Tier::Tight) => if l.mixture { 0.25 } else { 0.15 },
         (true, _) => 0.30,
         (false, _) => 0.35,
     };

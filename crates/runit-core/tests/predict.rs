@@ -41,6 +41,7 @@ fn a_mixture_of_experts_reads_only_the_experts_it_uses() {
     let l = load_from_shape(&moe, 18_600_000_000); // Qwen3-30B-A3B: about a tenth is active
     assert!(l.touched_bytes > 1.6e9 && l.touched_bytes < 2.6e9, "{}", l.touched_bytes);
     assert!(l.active_params > 2.5e9 && l.active_params < 4e9, "{}", l.active_params);
+    assert!(l.mixture);
 }
 
 #[test]

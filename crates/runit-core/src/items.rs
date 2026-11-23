@@ -291,7 +291,7 @@ impl Items {
                 before += f.size;
                 continue;
             }
-            let (mut shown, mut mark) = (Instant::now(), None::<(Instant, u64)>);
+            let (mut shown, mut mark) = (None::<Instant>, None::<(Instant, u64)>);
             let mut speed = 0.0;
             let mut report = |n: u64| {
                 let (t0, n0) = *mark.get_or_insert((Instant::now(), n));
@@ -301,8 +301,8 @@ impl Items {
                     speed = if speed == 0.0 { now } else { speed * 0.7 + now * 0.3 };
                     mark = Some((Instant::now(), n));
                 }
-                if shown.elapsed().as_millis() >= 100 || n == f.size {
-                    shown = Instant::now();
+                if shown.is_none_or(|t| t.elapsed().as_millis() >= 100) || n == f.size {
+                    shown = Some(Instant::now());
                     self.update(key, false, |i| {
                         i.done = before + n;
                         i.bytes_per_s = speed;
