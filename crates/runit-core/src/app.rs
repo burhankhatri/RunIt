@@ -207,6 +207,7 @@ impl App {
                     "ratings_source": i.ratings.source,
                 }))
             }
+            "creature" => value(crate::creature::creature(&param::<String>(p, "name")?)),
             "bench.start" => self.bench(),
             "bench.stop" => {
                 i.stop_bench.store(true, Ordering::Relaxed);
